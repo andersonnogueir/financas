@@ -14,6 +14,11 @@ import bank_parser
 
 import jinja2
 
+try:
+    import templates_embedded
+except ImportError:
+    templates_embedded = None
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(
@@ -25,16 +30,40 @@ app.secret_key = os.environ.get("SECRET_KEY", "finflow-secret-super-secure-key-2
 app.config['JSON_SORT_KEYS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 # 16MB max upload
 
-# Configura múltiplos locais de templates para garantir carregamento na Vercel
-available_template_dirs = [
-    os.path.join(BASE_DIR, "templates"),
-    BASE_DIR,
-    os.path.join(os.getcwd(), "templates"),
-    os.getcwd()
+# Carregador de templates inteligente com fallback embutido
+loaders = [
+    jinja2.FileSystemLoader(os.path.join(BASE_DIR, "templates")),
+    jinja2.FileSystemLoader(BASE_DIR),
+    jinja2.FileSystemLoader(os.path.join(os.getcwd(), "templates")),
+    jinja2.FileSystemLoader(os.getcwd())
 ]
-app.jinja_loader = jinja2.ChoiceLoader([
-    jinja2.FileSystemLoader(d) for d in available_template_dirs if os.path.exists(d)
-])
+
+if templates_embedded:
+    loaders.append(jinja2.DictLoader({
+        "login.html": templates_embedded.LOGIN_HTML,
+        "index.html": templates_embedded.INDEX_HTML
+    }))
+
+app.jinja_loader = jinja2.ChoiceLoader(loaders)
+
+# Servir static com fallback para templates_embedded
+@app.route("/static/css/styles.css")
+def serve_custom_css():
+    file_path = os.path.join(BASE_DIR, "static", "css", "styles.css")
+    if os.path.exists(file_path):
+        return Response(open(file_path, "r", encoding="utf-8").read(), mimetype="text/css")
+    if templates_embedded:
+        return Response(templates_embedded.STYLES_CSS, mimetype="text/css")
+    return Response("", mimetype="text/css")
+
+@app.route("/static/js/app.js")
+def serve_custom_js():
+    file_path = os.path.join(BASE_DIR, "static", "js", "app.js")
+    if os.path.exists(file_path):
+        return Response(open(file_path, "r", encoding="utf-8").read(), mimetype="application/javascript")
+    if templates_embedded:
+        return Response(templates_embedded.APP_JS, mimetype="application/javascript")
+    return Response("", mimetype="application/javascript")
 
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 
