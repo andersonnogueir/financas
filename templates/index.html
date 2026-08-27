@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinFlow | Gestão Financeira Inteligente</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- SweetAlert2 -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-200">
+
+  <!-- TOP NAVBAR -->
+  <header class="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 transition-colors">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        
+        <!-- Logo e Título -->
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 shrink-0">
+            <i data-lucide="wallet-cards" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h1 class="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+              FinFlow <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-semibold border border-indigo-200/60 dark:border-indigo-700/40">PRO</span>
+            </h1>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Controle Financeiro Pessoal</p>
+          </div>
+        </div>
+
+        <!-- Seletor de Mês / Ano Compacto e Elegante -->
+        <div class="flex items-center bg-slate-100/90 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700/60 shadow-inner">
+          <button id="btn-mes-anterior" title="Mês Anterior" class="p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          </button>
+          
+          <div class="px-3 py-0.5 flex items-center gap-1.5 min-w-[125px] justify-center">
+            <i data-lucide="calendar" class="w-3.5 h-3.5 text-indigo-500 shrink-0"></i>
+            <span id="label-mes-ano" class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 select-none whitespace-nowrap">Mês Atual</span>
+          </div>
+
+          <button id="btn-mes-proximo" title="Próximo Mês" class="p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition">
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+
+          <button id="btn-mes-atual" title="Ir para o mês atual" class="ml-1 text-[11px] px-2 py-1 rounded-lg bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 font-semibold hover:bg-indigo-50 dark:hover:bg-slate-600 transition shadow-sm border border-slate-200/40 dark:border-slate-600/40">
+            Hoje
+          </button>
+        </div>
+
+        <!-- Ações do Topo e Perfil do Usuário -->
+        <div class="flex items-center gap-2 sm:gap-3">
+          <!-- Alternar Tema -->
+          <button id="btn-toggle-theme" title="Alternar Modo Escuro/Claro" class="p-2.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/60 dark:border-slate-700/60 transition">
+            <i id="theme-icon" data-lucide="sun" class="w-4 h-4"></i>
+          </button>
+
+          <!-- Botão Importar Extrato Bancário Inteligente -->
+          <button id="btn-open-modal-import" title="Importar arquivo bancário (OFX, CSV, TXT)" class="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 border border-indigo-200/80 dark:border-indigo-800/80 rounded-xl shadow-sm transition transform hover:-translate-y-0.5">
+            <i data-lucide="file-up" class="w-4 h-4 text-indigo-500"></i>
+            <span class="hidden sm:inline">Importar Extrato</span>
+            <span class="inline-flex items-center px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-indigo-600 text-white">IA</span>
+          </button>
+
+          <!-- Exportar CSV -->
+          <a id="btn-export-csv" href="/api/export/csv" title="Exportar Extrato em CSV / Excel" class="hidden md:flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100/80 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 rounded-xl transition border border-slate-200/60 dark:border-slate-700/60">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            <span>Exportar</span>
+          </a>
+
+          <!-- Botão Novo Lançamento -->
+          <button id="btn-open-modal-lancamento" class="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-md shadow-indigo-600/30 transition transform hover:-translate-y-0.5">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+            <span>Novo Lançamento</span>
+            <span class="hidden md:inline text-[10px] bg-indigo-700/80 px-1.5 py-0.5 rounded border border-indigo-400/30">N</span>
+          </button>
+
+          <!-- Perfil do Usuário & Logout -->
+          <div class="flex items-center pl-2 border-l border-slate-200 dark:border-slate-800 gap-2">
+            <div class="flex items-center gap-2">
+              <img id="user-avatar-img" src="https://ui-avatars.com/api/?name=User&background=6366f1&color=fff" class="w-8 h-8 rounded-full border border-slate-300 dark:border-slate-700 object-cover shadow-sm" alt="Avatar">
+              <div class="hidden lg:block text-left">
+                <p id="user-nome-label" class="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">Usuário</p>
+                <p id="user-email-label" class="text-[10px] text-slate-400 leading-tight truncate max-w-[110px]">user@exemplo.com</p>
+              </div>
+            </div>
+            
+            <button id="btn-logout" title="Sair da Conta (Logout)" class="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition">
+              <i data-lucide="log-out" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TABS DE NAVEGAÇÃO -->
+      <nav class="flex space-x-1 sm:space-x-4 border-t border-slate-200 dark:border-slate-800/80 pt-1 -mb-px overflow-x-auto">
+        <button class="nav-tab active-tab flex items-center gap-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 whitespace-nowrap" data-tab="dashboard">
+          <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+          <span>Visão Geral</span>
+        </button>
+
+        <button class="nav-tab flex items-center gap-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 whitespace-nowrap" data-tab="transacoes">
+          <i data-lucide="arrow-left-right" class="w-4 h-4"></i>
+          <span>Lançamentos & Extrato</span>
+        </button>
+
+        <button class="nav-tab flex items-center gap-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 whitespace-nowrap" data-tab="recorrencias">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          <span>Despesas Fixas / Recorrentes</span>
+        </button>
+
+        <button class="nav-tab flex items-center gap-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 whitespace-nowrap" data-tab="contas">
+          <i data-lucide="landmark" class="w-4 h-4"></i>
+          <span>Contas Bancárias</span>
+        </button>
+
+        <button class="nav-tab flex items-center gap-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 whitespace-nowrap" data-tab="categorias">
+          <i data-lucide="tags" class="w-4 h-4"></i>
+          <span>Categorias & Regras IA</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- CONTEÚDO PRINCIPAL -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- BANNER DE ONBOARDING -->
+    <div id="banner-onboarding" class="hidden bg-gradient-to-r from-indigo-900/60 via-purple-900/50 to-slate-900/80 border border-indigo-500/30 p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg shadow-indigo-950/30 fade-in">
+      <div class="flex items-center gap-3.5">
+        <div class="w-12 h-12 rounded-2xl bg-indigo-600/30 border border-indigo-400/30 flex items-center justify-center text-indigo-400 shrink-0">
+          <i data-lucide="sparkles" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-white">Sua base de dados está 100% pronta e zerada!</h3>
+          <p class="text-xs text-indigo-200/80 mt-0.5">Cadastre sua primeira conta bancária para começar a lançar despesas ou importe seu extrato (OFX/CSV) com 1 clique.</p>
+        </div>
+      </div>
+      <button id="btn-onboarding-conta" class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/40 transition whitespace-nowrap flex items-center gap-2">
+        <i data-lucide="plus" class="w-4 h-4"></i>
+        Cadastrar Primeira Conta
+      </button>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- TAB 1: VISÃO GERAL (DASHBOARD) -->
+    <!-- ============================================== -->
+    <div id="tab-dashboard" class="tab-pane space-y-6 fade-in">
+      
+      <!-- 4 CARDS DE RESUMO FINANCEIRO -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <!-- Card 1: Saldo Consolidado em Contas -->
+        <div class="stat-card bg-white dark:bg-slate-900/90 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm relative overflow-hidden flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Saldo Consolidado</span>
+            <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-100 dark:border-indigo-800/60">
+              <i data-lucide="wallet" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div class="mt-3">
+            <h3 id="card-saldo-total" class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">R$ 0,00</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+              <span>Saldo real disponível</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- Card 2: Receitas do Mês -->
+        <div class="stat-card bg-white dark:bg-slate-900/90 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm relative overflow-hidden flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Receitas do Mês</span>
+            <div class="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-100 dark:border-emerald-800/60">
+              <i data-lucide="trending-up" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div class="mt-3">
+            <h3 id="card-receitas-total" class="text-2xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">R$ 0,00</h3>
+            <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-1.5">
+              <span class="flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span>Recebidas: <b id="card-receitas-pagas" class="text-slate-700 dark:text-slate-200 font-semibold">R$ 0,00</b></span>
+              </span>
+              <span class="flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                <span>A receber: <b id="card-receitas-pendentes" class="text-slate-700 dark:text-slate-200 font-semibold">R$ 0,00</b></span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 3: Despesas do Mês -->
+        <div class="stat-card bg-white dark:bg-slate-900/90 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm relative overflow-hidden flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Despesas do Mês</span>
+            <div class="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center border border-rose-100 dark:border-rose-800/60">
+              <i data-lucide="trending-down" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div class="mt-3">
+            <h3 id="card-despesas-total" class="text-2xl font-black text-rose-600 dark:text-rose-400 tracking-tight">R$ 0,00</h3>
+            <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-1.5">
+              <span class="flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                <span>Pagas: <b id="card-despesas-pagas" class="text-slate-700 dark:text-slate-200 font-semibold">R$ 0,00</b></span>
+              </span>
+              <span class="flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                <span>Pendentes: <b id="card-despesas-pendentes" class="text-slate-700 dark:text-slate-200 font-semibold">R$ 0,00</b></span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 4: Saldo Previsto no Fim do Mês -->
+        <div class="stat-card bg-white dark:bg-slate-900/90 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm relative overflow-hidden flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Saldo Previsto (Fim do Mês)</span>
+            <div class="w-9 h-9 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center border border-cyan-100 dark:border-cyan-800/60">
+              <i data-lucide="target" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div class="mt-3">
+            <h3 id="card-saldo-previsto" class="text-2xl font-black text-cyan-600 dark:text-cyan-400 tracking-tight">R$ 0,00</h3>
+            <p id="card-balanco-mes" class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 flex items-center gap-1.5">
+              <span>Balanço mensal:</span> <b class="font-semibold text-slate-700 dark:text-slate-200">R$ 0,00</b>
+            </p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- SEÇÃO: MINHAS CONTAS BANCÁRIAS -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="credit-card" class="w-5 h-5 text-indigo-500"></i>
+            <h2 class="text-base font-bold text-slate-900 dark:text-white">Minhas Contas e Carteiras</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="btn-quick-import" class="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 font-semibold transition border border-indigo-200/50 dark:border-indigo-800/40">
+              <i data-lucide="file-up" class="w-3.5 h-3.5"></i>
+              Importar Extrato
+            </button>
+            <button id="btn-quick-transfer" class="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold transition border border-slate-200/60 dark:border-slate-700/60">
+              <i data-lucide="arrow-left-right" class="w-3.5 h-3.5"></i>
+              Transferir
+            </button>
+            <button id="btn-quick-new-account" class="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold transition border border-slate-200/60 dark:border-slate-700/60">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              Nova Conta
+            </button>
+          </div>
+        </div>
+
+        <div id="grid-contas-dashboard" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <!-- Injetado dinamicamente -->
+        </div>
+      </div>
+
+      <!-- GRÁFICOS & ALERTAS -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Gráfico 1: Despesas por Categoria (Rosca) -->
+        <div class="bg-white dark:bg-slate-900/90 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <i data-lucide="pie-chart" class="w-4 h-4 text-indigo-500"></i>
+              Despesas por Categoria
+            </h3>
+            <span id="tag-mes-grafico" class="text-xs text-slate-500 dark:text-slate-400 font-medium"></span>
+          </div>
+          <div class="relative flex-1 flex items-center justify-center min-h-[240px]">
+            <canvas id="chart-categorias"></canvas>
+            <div id="chart-empty-msg" class="hidden absolute inset-0 flex flex-col items-center justify-center text-center p-4">
+              <i data-lucide="folder-open" class="w-8 h-8 text-slate-400 mb-2"></i>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Nenhuma despesa registrada neste mês.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gráfico 2: Fluxo Mensal dos últimos 6 meses -->
+        <div class="bg-white dark:bg-slate-900/90 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <i data-lucide="bar-chart-3" class="w-4 h-4 text-emerald-500"></i>
+              Fluxo dos Últimos 6 Meses
+            </h3>
+          </div>
+          <div class="relative flex-1 flex items-center justify-center min-h-[240px]">
+            <canvas id="chart-historico"></canvas>
+          </div>
+        </div>
+
+        <!-- Alertas: Contas a Vencer nos Próximos 7 Dias -->
+        <div class="bg-white dark:bg-slate-900/90 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <i data-lucide="bell-ring" class="w-4 h-4 text-amber-500"></i>
+              A Vencer / Vencidas
+            </h3>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 font-semibold" id="badge-alertas-count">0</span>
+          </div>
+
+          <div id="lista-alertas-dashboard" class="flex-1 space-y-2.5 overflow-y-auto max-h-[250px] pr-1">
+            <!-- Injetado dinamicamente -->
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ============================================== -->
+    <!-- TAB 2: LANÇAMENTOS & EXTRATO -->
+    <!-- ============================================== -->
+    <div id="tab-transacoes" class="tab-pane hidden space-y-4 fade-in">
+      
+      <!-- BARRA DE FILTROS & AÇÃO DE ZERAR MÊS & IMPORTAR -->
+      <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+          
+          <!-- Busca por texto -->
+          <div class="md:col-span-2 relative">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400"></i>
+            <input type="text" id="filtro-busca" placeholder="Buscar por descrição ou observação..." class="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+          </div>
+
+          <!-- Filtro Conta -->
+          <div>
+            <select id="filtro-conta" class="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+              <option value="">Todas as Contas</option>
+            </select>
+          </div>
+
+          <!-- Filtro Categoria -->
+          <div>
+            <select id="filtro-categoria" class="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+              <option value="">Todas as Categorias</option>
+            </select>
+          </div>
+
+          <!-- Filtro Tipo / Status -->
+          <div class="flex gap-2">
+            <select id="filtro-tipo" class="w-1/2 px-2 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+              <option value="">Tipo: Todos</option>
+              <option value="despesa">Despesas</option>
+              <option value="receita">Receitas</option>
+              <option value="transferencia">Transf.</option>
+            </select>
+
+            <select id="filtro-status" class="w-1/2 px-2 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+              <option value="">Status: Todos</option>
+              <option value="pago">Pagas</option>
+              <option value="pendente">Pendentes</option>
+            </select>
+          </div>
+
+        </div>
+
+        <!-- Sub-resumo dos filtros e Ações de Importar e Zerar Mês -->
+        <div class="flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800 gap-2">
+          <div class="flex items-center gap-4">
+            <span>Total de registros: <b id="lbl-total-registros" class="text-slate-900 dark:text-white">0</b></span>
+            <span>Total filtrado: <b id="lbl-total-valor-filtrado" class="text-slate-900 dark:text-white">R$ 0,00</b></span>
+          </div>
+          
+          <div class="flex items-center gap-3">
+            <button id="btn-extrato-importar" class="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">
+              <i data-lucide="file-up" class="w-3.5 h-3.5"></i>
+              Importar Extrato OFX/CSV
+            </button>
+            <span class="text-slate-300 dark:text-slate-700">|</span>
+            <button id="btn-limpar-filtros" class="text-slate-600 dark:text-slate-400 hover:underline">Limpar Filtros</button>
+            <span class="text-slate-300 dark:text-slate-700">|</span>
+            <button id="btn-zerar-mes" class="flex items-center gap-1 text-rose-600 dark:text-rose-400 hover:text-rose-700 font-semibold transition hover:underline">
+              <i data-lucide="trash" class="w-3.5 h-3.5"></i>
+              Zerar Lançamentos deste Mês
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TABELA DE TRANSAÇÕES -->
+      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs sm:text-sm">
+            <thead class="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800">
+              <tr>
+                <th class="py-3.5 px-4">Data</th>
+                <th class="py-3.5 px-4">Descrição & Categoria</th>
+                <th class="py-3.5 px-4">Conta Bancária</th>
+                <th class="py-3.5 px-4 text-right">Valor</th>
+                <th class="py-3.5 px-4 text-center">Status / Baixa</th>
+                <th class="py-3.5 px-4 text-center">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-transacoes" class="divide-y divide-slate-100 dark:divide-slate-800/80">
+              <!-- Injetado dinamicamente -->
+            </tbody>
+          </table>
+        </div>
+
+        <div id="transacoes-empty-msg" class="hidden p-12 text-center">
+          <div class="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3 text-slate-400">
+            <i data-lucide="inbox" class="w-6 h-6"></i>
+          </div>
+          <p class="text-sm font-semibold text-slate-700 dark:text-slate-300">Nenhum lançamento registrado neste mês</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Clique em "+ Novo Lançamento" ou "Importar Extrato" para adicionar suas movimentações.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================== -->
+    <!-- TAB 3: RECORRÊNCIAS & DESPESAS FIXAS -->
+    <!-- ============================================== -->
+    <div id="tab-recorrencias" class="tab-pane hidden space-y-4 fade-in">
+      <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <i data-lucide="refresh-cw" class="w-5 h-5 text-indigo-500"></i>
+            Despesas & Receitas Recorrentes (Fixas)
+          </h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Cadastre contas que você paga todo mês (aluguel, condomínio, internet, assinaturas, salários) e defina a data de início!
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="btn-force-generate-recurring" class="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl transition">
+            <i data-lucide="sparkles" class="w-4 h-4 text-amber-500"></i>
+            Sincronizar no Mês Atual
+          </button>
+          <button id="btn-modal-recorrencia" class="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            Nova Recorrência
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabela de Recorrências -->
+      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs sm:text-sm">
+            <thead class="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800">
+              <tr>
+                <th class="py-3.5 px-4">Dia do Vencimento</th>
+                <th class="py-3.5 px-4">Descrição & Categoria</th>
+                <th class="py-3.5 px-4">Data de Início</th>
+                <th class="py-3.5 px-4">Conta Padrão</th>
+                <th class="py-3.5 px-4 text-right">Valor Estimado</th>
+                <th class="py-3.5 px-4 text-center">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-recorrencias" class="divide-y divide-slate-100 dark:divide-slate-800/80">
+              <!-- Injetado via JS -->
+            </tbody>
+          </table>
+        </div>
+        <div id="recorrencias-empty-msg" class="hidden p-12 text-center">
+          <p class="text-xs text-slate-500 dark:text-slate-400">Nenhuma despesa ou receita fixa cadastrada ainda.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- TAB 4: CONTAS BANCÁRIAS -->
+    <!-- ============================================== -->
+    <div id="tab-contas" class="tab-pane hidden space-y-6 fade-in">
+      <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <i data-lucide="landmark" class="w-5 h-5 text-indigo-500"></i>
+            Gestão de Contas Bancárias & Carteiras
+          </h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Cadastre suas contas correntes, contas digitais, poupança, carteira e investimentos para acompanhar seus saldos consolidados.
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="btn-nova-conta-tab" class="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            Cadastrar Nova Conta
+          </button>
+        </div>
+      </div>
+
+      <div id="grid-contas-gerenciamento" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <!-- Injetado via JS -->
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- TAB 5: CATEGORIAS & REGRAS INTELIGENTES -->
+    <!-- ============================================== -->
+    <div id="tab-categorias" class="tab-pane hidden space-y-6 fade-in">
+      <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <i data-lucide="tags" class="w-5 h-5 text-indigo-500"></i>
+            Categorias & Memória de Categorização Inteligente
+          </h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Organize suas movimentações e veja os padrões que o FinFlow aprendeu para auto-categorizar seus extratos.
+          </p>
+        </div>
+
+        <button id="btn-nova-categoria-tab" class="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          Nova Categoria
+        </button>
+      </div>
+
+      <!-- Grid de Categorias -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Despesas -->
+        <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+          <h3 class="text-sm font-bold text-rose-600 dark:text-rose-400 flex items-center gap-2">
+            <i data-lucide="arrow-down-circle" class="w-4 h-4"></i>
+            Categorias de Despesas
+          </h3>
+          <div id="lista-categorias-despesa" class="space-y-2"></div>
+        </div>
+
+        <!-- Receitas -->
+        <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+          <h3 class="text-sm font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+            <i data-lucide="arrow-up-circle" class="w-4 h-4"></i>
+            Categorias de Receitas
+          </h3>
+          <div id="lista-categorias-receita" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <!-- Memória de Regras Aprendidas da IA -->
+      <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <i data-lucide="sparkles" class="w-4 h-4 text-indigo-500"></i>
+              Regras de Auto-Categorização Memorizadas
+            </h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Padrões que você ensinou ao FinFlow durante as importações para reconhecer e classificar automaticamente.
+            </p>
+          </div>
+          <span id="badge-regras-count" class="text-xs px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-200 dark:border-indigo-800/60">0 regras</span>
+        </div>
+
+        <div id="grid-regras-aprendidas" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <!-- Injetado dinamicamente -->
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ============================================== -->
+  <!-- MODAL PRINCIPAL: IMPORTAÇÃO BANCÁRIA INTELIGENTE (OFX, CSV, TXT) -->
+  <!-- ============================================== -->
+  <div id="modal-import" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 modal-backdrop hidden">
+    <div class="bg-white dark:bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col transform transition-all">
+      
+      <!-- Cabeçalho do Modal de Importação -->
+      <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/30">
+            <i data-lucide="file-up" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 id="modal-import-titulo" class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              Importação Inteligente de Extrato Bancário
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold uppercase tracking-wider">OFX / CSV / TXT</span>
+            </h3>
+            <p id="modal-import-subtitulo" class="text-xs text-slate-500 dark:text-slate-400">Envie o arquivo exportado do seu banco para pré-visualizar e categorizar com IA</p>
+          </div>
+        </div>
+
+        <button class="btn-close-modal text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- ETAPA 1: UPLOAD DO ARQUIVO -->
+      <div id="import-etapa-1" class="p-6 space-y-5 overflow-y-auto">
+        <div class="space-y-4">
+          <!-- Seleção de Conta -->
+          <div>
+            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">1. Selecione a Conta Bancária de Destino *</label>
+            <select id="import-conta-id" required class="w-full px-3.5 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+              <!-- Preenchido dinamicamente -->
+            </select>
+          </div>
+
+          <!-- Dropzone -->
+          <div>
+            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">2. Selecione ou arraste o arquivo do extrato *</label>
+            <div id="import-dropzone" class="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-2xl p-8 text-center cursor-pointer transition bg-slate-50/50 dark:bg-slate-800/20 group">
+              <input type="file" id="import-file-input" accept=".ofx,.csv,.txt" class="hidden">
+              <div class="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition">
+                <i data-lucide="upload-cloud" class="w-7 h-7"></i>
+              </div>
+              <p class="text-sm font-bold text-slate-800 dark:text-slate-200">Arraste seu arquivo OFX ou CSV aqui</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">ou clique para procurar no seu computador</p>
+              
+              <div class="flex flex-wrap items-center justify-center gap-2 mt-4">
+                <span class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">.OFX (Nubank, Itaú, Bradesco, BB, Inter, Santander, Caixa...)</span>
+                <span class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">.CSV / .TXT</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Indicador de Arquivo Selecionado -->
+          <div id="import-selected-file-info" class="hidden p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800/70 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <i data-lucide="file-check-2" class="w-5 h-5 text-indigo-600 dark:text-indigo-400"></i>
+              <div>
+                <p id="import-file-name" class="text-xs font-bold text-indigo-950 dark:text-indigo-200">extrato.ofx</p>
+                <p id="import-file-size" class="text-[10px] text-indigo-600 dark:text-indigo-400">12.5 KB</p>
+              </div>
+            </div>
+            <button id="btn-import-process-file" class="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5">
+              <span>Analisar e Pré-visualizar</span>
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ETAPA 2: CONFERÊNCIA & EDIÇÃO INTERATIVA COM SUGESTÃO IA -->
+      <div id="import-etapa-2" class="hidden flex-1 flex flex-col overflow-hidden">
+        
+        <!-- Barra de Resumo e Filtros da Prévia -->
+        <div class="p-4 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="font-bold text-slate-900 dark:text-white" id="import-preview-stats">0 transações</span>
+            <span class="text-emerald-500 font-semibold" id="import-preview-rec">+R$ 0,00</span>
+            <span class="text-rose-500 font-semibold" id="import-preview-desp">-R$ 0,00</span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button id="btn-import-select-all" class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 font-medium hover:bg-slate-100">
+              Selecionar Todas
+            </button>
+            <button id="btn-import-unselect-all" class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 font-medium hover:bg-slate-100">
+              Desmarcar Todas
+            </button>
+          </div>
+        </div>
+
+        <!-- Tabela de Conferência com Scroll -->
+        <div class="flex-1 overflow-y-auto p-4">
+          <table class="w-full text-left text-xs">
+            <thead class="sticky top-0 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800 z-10">
+              <tr>
+                <th class="py-2.5 px-3 w-10 text-center">Importar</th>
+                <th class="py-2.5 px-3">Data</th>
+                <th class="py-2.5 px-3">Descrição Bancária</th>
+                <th class="py-2.5 px-3 text-right">Valor</th>
+                <th class="py-2.5 px-3">Categoria (Sugestão IA)</th>
+                <th class="py-2.5 px-3 text-center" title="Memorizar categoria para próximas importações">🧠 Lembrar</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-import-preview" class="divide-y divide-slate-100 dark:divide-slate-800">
+              <!-- Injetado dinamicamente via JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Rodapé de Ações da Importação -->
+        <div class="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-3">
+          <button id="btn-import-voltar" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition flex items-center gap-1.5">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <span>Voltar / Escolher outro arquivo</span>
+          </button>
+
+          <button id="btn-import-confirmar-final" class="px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2">
+            <i data-lucide="check-check" class="w-4 h-4"></i>
+            <span id="lbl-btn-confirm-import">Confirmar Importação</span>
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL: LANÇAMENTO RÁPIDO -->
+  <div id="modal-lancamento" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden transform transition-all">
+      <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <h3 id="modal-lancamento-titulo" class="text-base font-bold text-slate-900 dark:text-white">Novo Lançamento</h3>
+        <button class="btn-close-modal text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-lancamento" class="p-5 space-y-4">
+        <input type="hidden" id="lancamento-id" value="">
+
+        <div class="grid grid-cols-3 gap-2 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
+          <button type="button" class="btn-tipo-transacao py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 bg-rose-600 text-white shadow-sm" data-tipo="despesa">
+            <i data-lucide="arrow-down-right" class="w-3.5 h-3.5"></i>
+            Despesa
+          </button>
+          <button type="button" class="btn-tipo-transacao py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white" data-tipo="receita">
+            <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i>
+            Receita
+          </button>
+          <button type="button" class="btn-tipo-transacao py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white" data-tipo="transferencia">
+            <i data-lucide="arrow-left-right" class="w-3.5 h-3.5"></i>
+            Transferência
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Descrição *</label>
+            <input type="text" id="lancamento-descricao" required placeholder="Ex: Supermercado, Aluguel..." class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Valor (R$) *</label>
+            <div class="relative">
+              <span class="absolute left-3 top-2 text-sm font-bold text-slate-400">R$</span>
+              <input type="number" step="0.01" min="0.01" id="lancamento-valor" required placeholder="0,00" class="w-full pl-10 pr-3 py-2 text-sm font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Data *</label>
+            <input type="date" id="lancamento-data" required class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+          </div>
+          <div id="container-campo-status">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Status da Movimentação</label>
+            <select id="lancamento-status" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+              <option value="pago">Pago / Realizado (Debita/Credita do Saldo)</option>
+              <option value="pendente">Pendente / A Vencer (Agendado)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label id="lbl-conta-origem" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Conta Bancária *</label>
+            <select id="lancamento-conta" required class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+            </select>
+          </div>
+
+          <div id="container-conta-destino" class="hidden">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Conta de Destino *</label>
+            <select id="lancamento-conta-destino" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+            </select>
+          </div>
+
+          <div id="container-categoria">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Categoria</label>
+            <select id="lancamento-categoria" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Observações (opcional)</label>
+          <input type="text" id="lancamento-observacoes" placeholder="Ex: Pago no débito, comprovante no e-mail..." class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+          <button type="button" class="btn-close-modal px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">
+            Cancelar
+          </button>
+          <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition">
+            Salvar Lançamento
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVA / EDITAR CONTA BANCÁRIA -->
+  <div id="modal-conta" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
+      <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <h3 id="modal-conta-titulo" class="text-base font-bold text-slate-900 dark:text-white">Nova Conta Bancária</h3>
+        <button class="btn-close-modal text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-conta" class="p-5 space-y-4">
+        <input type="hidden" id="conta-id" value="">
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Nome de Identificação *</label>
+          <input type="text" id="conta-nome" required placeholder="Ex: Nubank, Carteira, Itaú Principal..." class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Instituição / Banco</label>
+            <input type="text" id="conta-instituicao" placeholder="Ex: Nubank, Itaú..." class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Tipo de Conta</label>
+            <select id="conta-tipo" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+              <option value="Corrente">Conta Corrente</option>
+              <option value="Poupança">Poupança</option>
+              <option value="Carteira">Carteira (Dinheiro)</option>
+              <option value="Investimento">Investimento</option>
+              <option value="Outros">Outros</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Saldo Inicial (R$)</label>
+            <input type="number" step="0.01" id="conta-saldo-inicial" placeholder="0,00" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Cor do Card</label>
+            <div class="flex items-center gap-2">
+              <input type="color" id="conta-cor" value="#3b82f6" class="h-9 w-12 rounded-lg cursor-pointer bg-transparent border-0">
+              <span id="conta-cor-label" class="text-xs font-mono text-slate-500">#3b82f6</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+          <button type="button" class="btn-close-modal px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">
+            Cancelar
+          </button>
+          <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition">
+            Salvar Conta
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: TRANSFERÊNCIA RÁPIDA -->
+  <div id="modal-transferencia" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
+      <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <i data-lucide="arrow-left-right" class="w-4 h-4 text-indigo-500"></i>
+          Transferir entre Contas
+        </h3>
+        <button class="btn-close-modal text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-transferencia-modal" class="p-5 space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">De (Origem) *</label>
+            <select id="transf-origem" required class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Para (Destino) *</label>
+            <select id="transf-destino" required class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Valor (R$) *</label>
+            <input type="number" step="0.01" min="0.01" id="transf-valor" required placeholder="0,00" class="w-full px-3 py-2 text-sm font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Data *</label>
+            <input type="date" id="transf-data" required class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Descrição / Motivo</label>
+          <input type="text" id="transf-descricao" value="Transferência entre contas" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+          <button type="button" class="btn-close-modal px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">
+            Cancelar
+          </button>
+          <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition">
+            Confirmar Transferência
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVA / EDITAR RECORRÊNCIA -->
+  <div id="modal-recorrencia" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
+      <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <h3 id="modal-rec-titulo" class="text-base font-bold text-slate-900 dark:text-white">Nova Despesa / Receita Recorrente</h3>
+        <button class="btn-close-modal text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-recorrencia" class="p-5 space-y-4">
+        <input type="hidden" id="rec-id" value="">
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Tipo *</label>
+          <div class="grid grid-cols-2 gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+            <button type="button" class="btn-rec-tipo py-1.5 rounded-lg text-xs font-bold transition bg-rose-600 text-white" data-tipo="despesa">
+              Despesa Fixa
+            </button>
+            <button type="button" class="btn-rec-tipo py-1.5 rounded-lg text-xs font-bold transition text-slate-600 dark:text-slate-400" data-tipo="receita">
+              Receita Fixa
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Descrição *</label>
+          <input type="text" id="rec-descricao" required placeholder="Ex: Aluguel, Internet, Netflix, Salário..." class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Data de Início *</label>
+            <input type="date" id="rec-data-inicio" required class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Término (Opcional)</label>
+            <input type="date" id="rec-data-fim" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Valor Estimado (R$) *</label>
+            <input type="number" step="0.01" min="0.01" id="rec-valor" required placeholder="0,00" class="w-full px-3 py-2 text-sm font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Dia do Vencimento (1 a 31) *</label>
+            <input type="number" min="1" max="31" id="rec-dia" required value="5" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Conta Padrão</label>
+            <select id="rec-conta" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Categoria</label>
+            <select id="rec-categoria" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+            </select>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+          <button type="button" class="btn-close-modal px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">
+            Cancelar
+          </button>
+          <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition">
+            Salvar Recorrência
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVA CATEGORIA -->
+  <div id="modal-categoria" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
+      <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <h3 class="text-base font-bold text-slate-900 dark:text-white">Nova Categoria</h3>
+        <button class="btn-close-modal text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-categoria" class="p-5 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Nome da Categoria *</label>
+          <input type="text" id="cat-nome" required placeholder="Ex: Streaming, Viagens, Pets..." class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Tipo</label>
+            <select id="cat-tipo" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+              <option value="despesa">Despesa</option>
+              <option value="receita">Receita</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Cor</label>
+            <input type="color" id="cat-cor" value="#6366f1" class="h-9 w-full rounded-lg cursor-pointer bg-transparent border-0">
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+          <button type="button" class="btn-close-modal px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">
+            Cancelar
+          </button>
+          <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition">
+            Criar Categoria
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- RODAPÉ -->
+  <footer class="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-4 text-center text-xs text-slate-500 dark:text-slate-400">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div class="flex items-center gap-1.5">
+        <span class="font-semibold text-slate-700 dark:text-slate-300">FinFlow</span> &bull; Gestão Financeira Pessoal Inteligente
+      </div>
+      <div>
+        Pressione <kbd class="kbd-shortcut">N</kbd> para Novo Lançamento ou <kbd class="kbd-shortcut">I</kbd> para Importar Extrato.
+      </div>
+    </div>
+  </footer>
+
+  <!-- Script Principal -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
