@@ -47,6 +47,8 @@ def login_required(f):
 # ==========================================
 
 @app.route("/")
+@app.route("/api/index")
+@app.route("/api/index.py")
 def index():
     if 'user_id' not in session:
         return redirect(url_for('login_page'))
