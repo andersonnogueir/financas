@@ -12,7 +12,13 @@ from werkzeug.security import check_password_hash
 import database
 import bank_parser
 
-app = Flask(__name__, template_folder="templates", static_folder="static")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+app = Flask(
+    __name__,
+    template_folder=os.path.join(BASE_DIR, "templates"),
+    static_folder=os.path.join(BASE_DIR, "static")
+)
 app.secret_key = os.environ.get("SECRET_KEY", "finflow-secret-super-secure-key-2026-auth")
 app.config['JSON_SORT_KEYS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 # 16MB max upload
@@ -20,7 +26,10 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 # 16MB max upload
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 
 # Inicializar o banco de dados
-database.init_db()
+try:
+    database.init_db()
+except Exception as e:
+    pass
 
 # Decorator para exigir autenticação em rotas protegidas
 def login_required(f):

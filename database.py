@@ -5,10 +5,20 @@ from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 
-if os.environ.get("VERCEL"):
-    DB_PATH = os.path.join("/tmp", "financas.db")
-else:
-    DB_PATH = os.environ.get("DATABASE_PATH", os.path.join(os.path.dirname(os.path.abspath(__file__)), "financas.db"))
+def _get_db_path():
+    if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or os.environ.get("NOW_REGION"):
+        return os.path.join("/tmp", "financas.db")
+    local_dir = os.path.dirname(os.path.abspath(__file__))
+    try:
+        test_file = os.path.join(local_dir, ".write_test")
+        with open(test_file, "w") as f:
+            f.write("1")
+        os.remove(test_file)
+        return os.environ.get("DATABASE_PATH", os.path.join(local_dir, "financas.db"))
+    except Exception:
+        return os.path.join("/tmp", "financas.db")
+
+DB_PATH = _get_db_path()
 
 def get_connection():
     db_exists = os.path.exists(DB_PATH)
