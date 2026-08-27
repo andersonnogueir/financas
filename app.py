@@ -12,6 +12,8 @@ from werkzeug.security import check_password_hash
 import database
 import bank_parser
 
+import jinja2
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(
@@ -23,6 +25,17 @@ app.secret_key = os.environ.get("SECRET_KEY", "finflow-secret-super-secure-key-2
 app.config['JSON_SORT_KEYS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 # 16MB max upload
 
+# Configura múltiplos locais de templates para garantir carregamento na Vercel
+available_template_dirs = [
+    os.path.join(BASE_DIR, "templates"),
+    BASE_DIR,
+    os.path.join(os.getcwd(), "templates"),
+    os.getcwd()
+]
+app.jinja_loader = jinja2.ChoiceLoader([
+    jinja2.FileSystemLoader(d) for d in available_template_dirs if os.path.exists(d)
+])
+
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 
 # Inicializar o banco de dados
@@ -30,6 +43,23 @@ try:
     database.init_db()
 except Exception as e:
     pass
+
+@app.errorhandler(500)
+@app.errorhandler(Exception)
+def handle_exception(e):
+    import traceback
+    tb = traceback.format_exc()
+    return f"""
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+      <head><meta charset="utf-8"><title>Erro no Servidor</title></head>
+      <body style="font-family: monospace; padding: 20px; background: #0f172a; color: #f87171;">
+        <h2 style="color: #ef4444;">Erro 500 no Servidor (Vercel):</h2>
+        <pre style="background: #1e293b; color: #f1f5f9; padding: 15px; border-radius: 8px; overflow: auto; border: 1px solid #334155;">{tb}</pre>
+        <p style="color: #94a3b8;">Exception: {str(e)}</p>
+      </body>
+    </html>
+    """, 500
 
 # Decorator para exigir autenticação em rotas protegidas
 def login_required(f):
