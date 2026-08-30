@@ -90,14 +90,108 @@ def handle_exception(e):
     </html>
     """, 500
 
-# Decorator para exigir autenticação em rotas protegidas
+# ==========================================
+# SUPORTE A TOKENS JWT & AUTENTICAÇÃO MOBILE
+# ==========================================
+
+import hmac
+import hashlib
+import time
+
+def generate_jwt(user_id, email, expires_in_days=30):
+    """Gera um JSON Web Token seguro (HS256) com validade para o app mobile."""
+    payload = {
+        "user_id": user_id,
+        "email": email,
+        "exp": int(time.time()) + (expires_in_days * 86400)
+    }
+    header = {"alg": "HS256", "typ": "JWT"}
+    
+    header_b64 = base64.urlsafe_b64encode(json.dumps(header).encode()).decode().rstrip("=")
+    payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+    
+    signature = hmac.new(
+        app.secret_key.encode(),
+        f"{header_b64}.{payload_b64}".encode(),
+        hashlib.sha256
+    ).digest()
+    sig_b64 = base64.urlsafe_b64encode(signature).decode().rstrip("=")
+    
+    return f"{header_b64}.{payload_b64}.{sig_b64}"
+
+def verify_jwt(token):
+    """Valida um JSON Web Token recebido no cabeçalho Authorization: Bearer."""
+    try:
+        parts = token.strip().split(".")
+        if len(parts) != 3:
+            return None
+        header_b64, payload_b64, sig_b64 = parts
+        
+        expected_sig = hmac.new(
+            app.secret_key.encode(),
+            f"{header_b64}.{payload_b64}".encode(),
+            hashlib.sha256
+        ).digest()
+        expected_sig_b64 = base64.urlsafe_b64encode(expected_sig).decode().rstrip("=")
+        
+        if not hmac.compare_digest(sig_b64, expected_sig_b64):
+            return None
+        
+        rem = len(payload_b64) % 4
+        if rem > 0:
+            payload_b64 += "=" * (4 - rem)
+        payload_json = base64.urlsafe_b64decode(payload_b64.encode()).decode()
+        payload = json.loads(payload_json)
+        
+        if payload.get("exp", 0) < int(time.time()):
+            return None
+            
+        return payload
+    except Exception:
+        return None
+
+# ==========================================
+# CORS & PREFLIGHT OPTIONS PARA MOBILE
+# ==========================================
+
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    return response
+
+@app.before_request
+def handle_options_preflight():
+    if request.method == 'OPTIONS':
+        res = Response()
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        res.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+        res.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        return res
+
+# Decorator unificado para exigir autenticação (Web por Session e Mobile por Bearer Token)
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # 1. Checa autenticação Mobile por Token JWT
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+            payload = verify_jwt(token)
+            if payload and "user_id" in payload:
+                session['user_id'] = payload['user_id']
+                session['user_email'] = payload.get('email', '')
+                return f(*args, **kwargs)
+            else:
+                return jsonify({"error": "Token de autenticação inválido ou expirado. Faça login novamente."}), 401
+
+        # 2. Checa autenticação Web por Sessão
         if 'user_id' not in session:
             if request.path.startswith('/api/'):
                 return jsonify({"error": "Não autenticado. Por favor, realize o login."}), 401
             return redirect(url_for('login_page'))
+
         return f(*args, **kwargs)
     return decorated_function
 
@@ -147,7 +241,15 @@ def auth_register():
         session['user_nome'] = user['nome']
         session['user_email'] = user['email']
         session['user_avatar'] = user.get('avatar_url') or ''
-        return jsonify({"success": True, "user": user, "message": "Conta criada com sucesso!"}), 201
+        
+        token = generate_jwt(user['id'], user['email'])
+
+        return jsonify({
+            "success": True, 
+            "token": token,
+            "user": user, 
+            "message": "Conta criada com sucesso!"
+        }), 201
     except Exception as e:
         return jsonify({"error": f"Erro ao criar conta: {str(e)}"}), 500
 
@@ -172,8 +274,11 @@ def auth_login():
     session['user_email'] = user['email']
     session['user_avatar'] = user.get('avatar_url') or ''
 
+    token = generate_jwt(user['id'], user['email'])
+
     return jsonify({
         "success": True,
+        "token": token,
         "user": {
             "id": user['id'],
             "nome": user['nome'],
@@ -181,6 +286,23 @@ def auth_login():
             "avatar_url": user.get('avatar_url') or ''
         },
         "message": f"Bem-vindo(a) de volta, {user['nome']}!"
+    })
+
+@app.route("/api/auth/verify", methods=["GET"])
+@login_required
+def auth_verify():
+    """Valida token e retorna os dados do usuário autenticado para o app mobile."""
+    user = database.get_user_by_id(session['user_id'])
+    if not user:
+        return jsonify({"error": "Usuário não encontrado"}), 404
+    return jsonify({
+        "authenticated": True,
+        "user": {
+            "id": user['id'],
+            "nome": user['nome'],
+            "email": user['email'],
+            "avatar_url": user.get('avatar_url') or ''
+        }
     })
 
 @app.route("/api/auth/config", methods=["GET"])
@@ -194,7 +316,6 @@ def auth_config():
 def auth_google():
     data = request.get_json() or {}
     
-    # Se recebeu credential JWT do Google Identity Services oficial (One-Tap / GSI)
     credential = data.get("credential")
     if credential:
         try:
@@ -243,8 +364,11 @@ def auth_google():
     session['user_email'] = user['email']
     session['user_avatar'] = user.get('avatar_url') or avatar_url
 
+    token = generate_jwt(user['id'], user['email'])
+
     return jsonify({
         "success": True,
+        "token": token,
         "user": {
             "id": user['id'],
             "nome": user['nome'],
