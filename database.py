@@ -106,31 +106,40 @@ def is_postgres():
 def get_connection():
     """Retorna uma conexão unificada (PostgreSQL se DATABASE_URL estiver configurado, senão SQLite)."""
     if is_postgres():
-        raw_conn = psycopg2.connect(DATABASE_URL)
-        conn = PostgresConnectionWrapper(raw_conn)
-        _init_postgres_tables_if_needed(conn)
-        return conn
-    else:
-        db_exists = os.path.exists(SQLITE_PATH)
-        conn = sqlite3.connect(SQLITE_PATH)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON;")
-        if not db_exists:
-            _init_sqlite_tables(conn)
-        return conn
+        try:
+            # Conexão com timeout para evitar travamento em serverless
+            raw_conn = psycopg2.connect(DATABASE_URL, connect_timeout=5)
+            conn = PostgresConnectionWrapper(raw_conn)
+            _init_postgres_tables_if_needed(conn)
+            return conn
+        except Exception as e:
+            print("[AVISO] Falha ao conectar no PostgreSQL, usando SQLite:", str(e))
+
+    # Fallback seguro para SQLite local
+    db_exists = os.path.exists(SQLITE_PATH)
+    conn = sqlite3.connect(SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
+    if not db_exists:
+        _init_sqlite_tables(conn)
+    return conn
 
 def init_db():
     """Inicializa as tabelas do banco de dados correspondente."""
     if is_postgres():
-        conn = get_connection()
-        _init_postgres_tables(conn)
-        conn.close()
-    else:
-        conn = sqlite3.connect(SQLITE_PATH)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON;")
-        _init_sqlite_tables(conn)
-        conn.close()
+        try:
+            conn = get_connection()
+            _init_postgres_tables(conn)
+            conn.close()
+            return
+        except Exception as e:
+            print("[AVISO] Falha ao inicializar PostgreSQL:", str(e))
+
+    conn = sqlite3.connect(SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
+    _init_sqlite_tables(conn)
+    conn.close()
 
 _pg_initialized = False
 
