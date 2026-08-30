@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "FinFlow",
+    "slug": "finflow-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.finflow.app",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "O FinFlow utiliza o Face ID para proteger e desbloquear seus dados financeiros com segurança."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f172a"
+      },
+      "package": "com.finflow.app",
+      "permissions": [
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "READ_EXTERNAL_STORAGE"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Permitir que o FinFlow use o Face ID para autenticação rápida."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "finflow-app-mobile"
+      },
+      "apiUrl": "https://financas-five-plum.vercel.app"
+    }
+  }
+}
