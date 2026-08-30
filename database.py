@@ -1,11 +1,24 @@
-import sqlite3
 import os
 import re
+import sqlite3
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 
-def _get_db_path():
+try:
+    import psycopg2
+    import psycopg2.extras
+    HAS_PSYCOPG2 = True
+except ImportError:
+    HAS_PSYCOPG2 = False
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+
+# Corrige prefixo postgres:// para postgresql:// exigido pelo psycopg2
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+def _get_sqlite_path():
     if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or os.environ.get("NOW_REGION"):
         return os.path.join("/tmp", "financas.db")
     local_dir = os.path.dirname(os.path.abspath(__file__))
@@ -18,28 +31,197 @@ def _get_db_path():
     except Exception:
         return os.path.join("/tmp", "financas.db")
 
-DB_PATH = _get_db_path()
+SQLITE_PATH = _get_sqlite_path()
+DB_PATH = SQLITE_PATH
+
+class PostgresCursorWrapper:
+    """Wrapper para padronizar o cursor do PostgreSQL com o padrão do SQLite."""
+    def __init__(self, real_cursor):
+        self.cur = real_cursor
+        self.lastrowid = None
+
+    def execute(self, sql, params=None):
+        # Converte placeholders ? do SQLite para %s do PostgreSQL
+        sql_pg = sql.replace("?", "%s")
+
+        # Converte funções de data strftime do SQLite para TO_CHAR do PostgreSQL
+        sql_pg = re.sub(r"strftime\('%m',\s*(\w+)\)", r"TO_CHAR(\1::date, 'MM')", sql_pg, flags=re.IGNORECASE)
+        sql_pg = re.sub(r"strftime\('%Y',\s*(\w+)\)", r"TO_CHAR(\1::date, 'YYYY')", sql_pg, flags=re.IGNORECASE)
+
+        # Se for INSERT e não tiver RETURNING, adiciona RETURNING id para emular cursor.lastrowid
+        is_insert = sql_pg.strip().upper().startswith("INSERT INTO")
+        if is_insert and "RETURNING" not in sql_pg.upper():
+            sql_pg_ret = sql_pg.rstrip(";") + " RETURNING id;"
+            try:
+                self.cur.execute(sql_pg_ret, params or ())
+                res = self.cur.fetchone()
+                if res:
+                    self.lastrowid = res["id"] if isinstance(res, dict) or hasattr(res, "keys") else res[0]
+                return self
+            except Exception:
+                # Se falhar o RETURNING id (ex: tabela sem coluna id), executa normal
+                pass
+
+        self.cur.execute(sql_pg, params or ())
+        return self
+
+    def executemany(self, sql, seq_of_params):
+        sql_pg = sql.replace("?", "%s")
+        self.cur.executemany(sql_pg, seq_of_params)
+        return self
+
+    def fetchone(self):
+        return self.cur.fetchone()
+
+    def fetchall(self):
+        return self.cur.fetchall()
+
+    @property
+    def rowcount(self):
+        return self.cur.rowcount
+
+    def close(self):
+        self.cur.close()
+
+class PostgresConnectionWrapper:
+    """Wrapper de conexão PostgreSQL para unificar métodos com SQLite."""
+    def __init__(self, real_conn):
+        self.conn = real_conn
+
+    def cursor(self):
+        return PostgresCursorWrapper(self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor))
+
+    def commit(self):
+        self.conn.commit()
+
+    def rollback(self):
+        self.conn.rollback()
+
+    def close(self):
+        self.conn.close()
+
+def is_postgres():
+    return bool(DATABASE_URL and HAS_PSYCOPG2)
 
 def get_connection():
-    db_exists = os.path.exists(DB_PATH)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
-    if not db_exists:
-        _init_db_tables(conn)
-    return conn
+    """Retorna uma conexão unificada (PostgreSQL se DATABASE_URL estiver configurado, senão SQLite)."""
+    if is_postgres():
+        raw_conn = psycopg2.connect(DATABASE_URL)
+        conn = PostgresConnectionWrapper(raw_conn)
+        _init_postgres_tables_if_needed(conn)
+        return conn
+    else:
+        db_exists = os.path.exists(SQLITE_PATH)
+        conn = sqlite3.connect(SQLITE_PATH)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON;")
+        if not db_exists:
+            _init_sqlite_tables(conn)
+        return conn
 
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
-    _init_db_tables(conn)
-    conn.close()
+    """Inicializa as tabelas do banco de dados correspondente."""
+    if is_postgres():
+        conn = get_connection()
+        _init_postgres_tables(conn)
+        conn.close()
+    else:
+        conn = sqlite3.connect(SQLITE_PATH)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON;")
+        _init_sqlite_tables(conn)
+        conn.close()
 
-def _init_db_tables(conn):
+_pg_initialized = False
+
+def _init_postgres_tables_if_needed(conn):
+    global _pg_initialized
+    if not _pg_initialized:
+        _init_postgres_tables(conn)
+        _pg_initialized = True
+
+def _init_postgres_tables(conn):
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id SERIAL PRIMARY KEY,
+            nome TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            senha_hash TEXT,
+            google_id TEXT UNIQUE,
+            avatar_url TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS contas (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+            nome TEXT NOT NULL,
+            instituicao TEXT,
+            tipo TEXT NOT NULL DEFAULT 'Corrente',
+            saldo_inicial NUMERIC NOT NULL DEFAULT 0.0,
+            cor TEXT DEFAULT '#3b82f6',
+            icone TEXT DEFAULT 'wallet',
+            ativo INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS categorias (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+            nome TEXT NOT NULL,
+            tipo TEXT NOT NULL,
+            icone TEXT DEFAULT 'tag',
+            cor TEXT DEFAULT '#64748b',
+            ativo INTEGER NOT NULL DEFAULT 1
+        );
+
+        CREATE TABLE IF NOT EXISTS recorrencias (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+            tipo TEXT NOT NULL,
+            descricao TEXT NOT NULL,
+            valor NUMERIC NOT NULL,
+            dia_vencimento INTEGER NOT NULL,
+            frequencia TEXT NOT NULL DEFAULT 'mensal',
+            conta_id INTEGER REFERENCES contas(id) ON DELETE SET NULL,
+            categoria_id INTEGER REFERENCES categorias(id) ON DELETE SET NULL,
+            ativo INTEGER NOT NULL DEFAULT 1,
+            data_inicio DATE NOT NULL,
+            data_fim DATE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS transacoes (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+            tipo TEXT NOT NULL,
+            descricao TEXT NOT NULL,
+            valor NUMERIC NOT NULL,
+            data DATE NOT NULL,
+            conta_id INTEGER REFERENCES contas(id) ON DELETE CASCADE,
+            conta_destino_id INTEGER REFERENCES contas(id) ON DELETE SET NULL,
+            categoria_id INTEGER REFERENCES categorias(id) ON DELETE SET NULL,
+            status TEXT NOT NULL DEFAULT 'pago',
+            observacoes TEXT,
+            recorrencia_id INTEGER REFERENCES recorrencias(id) ON DELETE SET NULL,
+            fitid TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS regras_categorizacao (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+            termo_busca TEXT NOT NULL,
+            categoria_id INTEGER NOT NULL REFERENCES categorias(id) ON DELETE CASCADE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, termo_busca)
+        );
+    """)
+    conn.commit()
+
+def _init_sqlite_tables(conn):
     cursor = conn.cursor()
-
-    # Tabela de Usuários
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,46 +231,40 @@ def _init_db_tables(conn):
             google_id TEXT UNIQUE,
             avatar_url TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
+        );
     """)
-
-    # Tabela de Contas Bancárias (por usuário)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS contas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             nome TEXT NOT NULL,
             instituicao TEXT,
-            tipo TEXT NOT NULL DEFAULT 'Corrente', -- Corrente, Poupança, Carteira, Investimento, Outros
+            tipo TEXT NOT NULL DEFAULT 'Corrente',
             saldo_inicial REAL NOT NULL DEFAULT 0.0,
             cor TEXT DEFAULT '#3b82f6',
             icone TEXT DEFAULT 'wallet',
             ativo INTEGER NOT NULL DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
-        )
+        );
     """)
-
-    # Tabela de Categorias (por usuário)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS categorias (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             nome TEXT NOT NULL,
-            tipo TEXT NOT NULL, -- 'despesa' ou 'receita'
+            tipo TEXT NOT NULL,
             icone TEXT DEFAULT 'tag',
             cor TEXT DEFAULT '#64748b',
             ativo INTEGER NOT NULL DEFAULT 1,
             FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
-        )
+        );
     """)
-
-    # Tabela de Despesas/Receitas Recorrentes (por usuário)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS recorrencias (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            tipo TEXT NOT NULL, -- 'despesa' ou 'receita'
+            tipo TEXT NOT NULL,
             descricao TEXT NOT NULL,
             valor REAL NOT NULL,
             dia_vencimento INTEGER NOT NULL,
@@ -102,35 +278,31 @@ def _init_db_tables(conn):
             FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
             FOREIGN KEY (conta_id) REFERENCES contas(id) ON DELETE SET NULL,
             FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE SET NULL
-        )
+        );
     """)
-
-    # Tabela de Transações (por usuário)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS transacoes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            tipo TEXT NOT NULL, -- 'despesa', 'receita', 'transferencia'
+            tipo TEXT NOT NULL,
             descricao TEXT NOT NULL,
             valor REAL NOT NULL,
             data DATE NOT NULL,
             conta_id INTEGER,
             conta_destino_id INTEGER,
             categoria_id INTEGER,
-            status TEXT NOT NULL DEFAULT 'pago', -- 'pago' ou 'pendente'
+            status TEXT NOT NULL DEFAULT 'pago',
             observacoes TEXT,
             recorrencia_id INTEGER,
-            fitid TEXT, -- ID único bancário para evitar duplicidade
+            fitid TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
             FOREIGN KEY (conta_id) REFERENCES contas(id) ON DELETE CASCADE,
             FOREIGN KEY (conta_destino_id) REFERENCES contas(id) ON DELETE SET NULL,
             FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE SET NULL,
             FOREIGN KEY (recorrencia_id) REFERENCES recorrencias(id) ON DELETE SET NULL
-        )
+        );
     """)
-
-    # Tabela de Regras de Categorização Inteligente (Memória de Aprendizado por Usuário)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS regras_categorizacao (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,19 +313,18 @@ def _init_db_tables(conn):
             FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
             FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE CASCADE,
             UNIQUE(user_id, termo_busca)
-        )
+        );
     """)
-
     conn.commit()
-    conn.close()
 
 def seed_user_default_categories(user_id, conn):
-    """Cria apenas o conjunto padrão de categorias úteis para o novo usuário."""
+    """Cria o conjunto padrão de categorias úteis para o novo usuário."""
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM categorias WHERE user_id = ?", (user_id,))
-    if cursor.fetchone()[0] == 0:
+    first_row = cursor.fetchone()
+    count = first_row[0] if first_row else 0
+    if count == 0:
         categorias_padrao = [
-            # Despesas
             (user_id, 'Alimentação & Supermercado', 'despesa', 'utensils', '#ef4444'),
             (user_id, 'Moradia (Aluguel, Condomínio, IPTU)', 'despesa', 'home', '#f97316'),
             (user_id, 'Contas Básicas (Luz, Água, Gás, Net)', 'despesa', 'zap', '#f59e0b'),
@@ -164,7 +335,6 @@ def seed_user_default_categories(user_id, conn):
             (user_id, 'Assinaturas & Serviços', 'despesa', 'tv', '#8b5cf6'),
             (user_id, 'Compras & Vestuário', 'despesa', 'shopping-bag', '#ec4899'),
             (user_id, 'Outras Despesas', 'despesa', 'more-horizontal', '#64748b'),
-            # Receitas
             (user_id, 'Salário / Proventos', 'receita', 'briefcase', '#10b981'),
             (user_id, 'Rendimentos & Investimentos', 'receita', 'trending-up', '#059669'),
             (user_id, 'Freelance / Serviços Extras', 'receita', 'laptop', '#3b82f6'),
@@ -196,7 +366,6 @@ def create_user(nome, email, senha=None, google_id=None, avatar_url=None):
     user_id = cursor.lastrowid
     conn.commit()
 
-    # Inicializar categorias padrão
     seed_user_default_categories(user_id, conn)
 
     cursor.execute("SELECT id, nome, email, avatar_url FROM usuarios WHERE id = ?", (user_id,))
@@ -225,7 +394,6 @@ def get_user_by_id(user_id):
 # MOTOR INTELIGENTE DE AUTO-CATEGORIZAÇÃO
 # ==========================================
 
-# Dicionário Semântico em Português com padrões de compras e serviços brasileiros
 DICIONARIO_SEMANTICO = {
     'Alimentação & Supermercado': [
         'ifood', 'rappi', 'uber eats', 'aiqfome', 'mercado', 'supermercado', 'hipermercado',
@@ -291,12 +459,6 @@ DICIONARIO_SEMANTICO = {
 }
 
 def sugerir_categoria(user_id, descricao, tipo, conn=None):
-    """
-    Motor inteligente de predição de categorias em 3 níveis:
-    1. Regras memorizadas pelo próprio usuário
-    2. Histórico recente de transações do usuário
-    3. Dicionário semântico e heurísticas em PT-BR
-    """
     should_close = False
     if conn is None:
         conn = get_connection()
@@ -305,11 +467,9 @@ def sugerir_categoria(user_id, descricao, tipo, conn=None):
     cursor = conn.cursor()
     desc_lower = descricao.lower().strip()
 
-    # Obter categorias do usuário para mapear ID e Nome
     cursor.execute("SELECT id, nome, tipo FROM categorias WHERE user_id = ? AND ativo = 1", (user_id,))
     categorias_user = [dict(r) for r in cursor.fetchall()]
     cat_by_id = {c['id']: c for c in categorias_user}
-    cat_by_name = {c['nome'].lower(): c for c in categorias_user}
 
     resultado = None
 
@@ -327,9 +487,8 @@ def sugerir_categoria(user_id, descricao, tipo, conn=None):
                 }
                 break
 
-    # 2. Nível 2: Histórico de transações semelhantes do próprio usuário
+    # 2. Nível 2: Histórico de transações semelhantes
     if not resultado:
-        # Extrair palavras-chave relevantes (> 3 letras)
         palavras = [p for p in re.findall(r'[a-zA-Z\u00C0-\u00FF]{4,}', desc_lower) if p not in ['para', 'pago', 'compra', 'cartao', 'debito', 'credito', 'transferencia']]
         for palavra in palavras:
             cursor.execute("""
@@ -349,11 +508,10 @@ def sugerir_categoria(user_id, descricao, tipo, conn=None):
                 }
                 break
 
-    # 3. Nível 3: Dicionário semântico inteligente
+    # 3. Nível 3: Dicionário semântico
     if not resultado:
         for cat_nome_padrao, termos in DICIONARIO_SEMANTICO.items():
             if any(t in desc_lower for t in termos):
-                # Encontrar a categoria correspondente do usuário
                 for c in categorias_user:
                     if cat_nome_padrao.lower() in c['nome'].lower() or c['nome'].lower() in cat_nome_padrao.lower():
                         resultado = {
@@ -365,7 +523,6 @@ def sugerir_categoria(user_id, descricao, tipo, conn=None):
             if resultado:
                 break
 
-    # Se ainda não encontrou, atribui a categoria padrão por tipo (Outras Despesas ou Salário)
     if not resultado:
         cat_padrao_nome = 'Outras Despesas' if tipo == 'despesa' else 'Salário / Proventos'
         cat_default = next((c for c in categorias_user if cat_padrao_nome.lower() in c['nome'].lower()), None)
@@ -385,7 +542,6 @@ def sugerir_categoria(user_id, descricao, tipo, conn=None):
     return resultado
 
 def salvar_regra_categorizacao(user_id, termo_busca, categoria_id, conn=None):
-    """Memoriza um padrão de texto associado a uma categoria para o usuário."""
     should_close = False
     if conn is None:
         conn = get_connection()
@@ -447,25 +603,25 @@ def calculate_account_balances(user_id, conn=None):
             SELECT COALESCE(SUM(valor), 0) FROM transacoes
             WHERE user_id = ? AND conta_id = ? AND tipo = 'receita' AND status = 'pago'
         """, (user_id, cid))
-        receitas_pagas = cursor.fetchone()[0]
+        receitas_pagas = float(cursor.fetchone()[0])
 
         cursor.execute("""
             SELECT COALESCE(SUM(valor), 0) FROM transacoes
             WHERE user_id = ? AND conta_id = ? AND tipo = 'despesa' AND status = 'pago'
         """, (user_id, cid))
-        despesas_pagas = cursor.fetchone()[0]
+        despesas_pagas = float(cursor.fetchone()[0])
 
         cursor.execute("""
             SELECT COALESCE(SUM(valor), 0) FROM transacoes
             WHERE user_id = ? AND conta_id = ? AND tipo = 'transferencia' AND status = 'pago'
         """, (user_id, cid))
-        transf_enviadas = cursor.fetchone()[0]
+        transf_enviadas = float(cursor.fetchone()[0])
 
         cursor.execute("""
             SELECT COALESCE(SUM(valor), 0) FROM transacoes
             WHERE user_id = ? AND conta_destino_id = ? AND tipo = 'transferencia' AND status = 'pago'
         """, (user_id, cid))
-        transf_recebidas = cursor.fetchone()[0]
+        transf_recebidas = float(cursor.fetchone()[0])
 
         conta['saldo_atual'] = round(saldo + receitas_pagas - despesas_pagas - transf_enviadas + transf_recebidas, 2)
         conta['receitas_pagas'] = round(receitas_pagas, 2)
@@ -505,11 +661,26 @@ def generate_recurring_for_month(user_id, mes, ano, conn=None):
               AND strftime('%Y', data) = ?
         """, (user_id, rec['id'], f"{mes:02d}", str(ano)))
         
-        existe = cursor.fetchone()[0] > 0
+        row_c = cursor.fetchone()
+        existe = (row_c[0] if row_c else 0) > 0
 
         if not existe:
-            data_inicio = datetime.strptime(rec['data_inicio'], '%Y-%m-%d').date() if rec['data_inicio'] else None
-            data_fim = datetime.strptime(rec['data_fim'], '%Y-%m-%d').date() if rec['data_fim'] else None
+            data_inicio_raw = rec['data_inicio']
+            data_fim_raw = rec['data_fim']
+
+            if isinstance(data_inicio_raw, (datetime, date)):
+                data_inicio = data_inicio_raw if isinstance(data_inicio_raw, date) else data_inicio_raw.date()
+            elif data_inicio_raw:
+                data_inicio = datetime.strptime(str(data_inicio_raw)[:10], '%Y-%m-%d').date()
+            else:
+                data_inicio = None
+
+            if isinstance(data_fim_raw, (datetime, date)):
+                data_fim = data_fim_raw if isinstance(data_fim_raw, date) else data_fim_raw.date()
+            elif data_fim_raw:
+                data_fim = datetime.strptime(str(data_fim_raw)[:10], '%Y-%m-%d').date()
+            else:
+                data_fim = None
 
             valido_inicio = True
             if data_inicio:
