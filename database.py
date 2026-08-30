@@ -41,12 +41,12 @@ class PostgresCursorWrapper:
         self.lastrowid = None
 
     def execute(self, sql, params=None):
-        # Converte placeholders ? do SQLite para %s do PostgreSQL
-        sql_pg = sql.replace("?", "%s")
+        # Converte funções de data strftime do SQLite para TO_CHAR do PostgreSQL (suporta aliases como t.data)
+        sql_pg = re.sub(r"strftime\('%m',\s*([^)]+)\)", r"TO_CHAR(\1::date, 'MM')", sql, flags=re.IGNORECASE)
+        sql_pg = re.sub(r"strftime\('%Y',\s*([^)]+)\)", r"TO_CHAR(\1::date, 'YYYY')", sql_pg, flags=re.IGNORECASE)
 
-        # Converte funções de data strftime do SQLite para TO_CHAR do PostgreSQL
-        sql_pg = re.sub(r"strftime\('%m',\s*(\w+)\)", r"TO_CHAR(\1::date, 'MM')", sql_pg, flags=re.IGNORECASE)
-        sql_pg = re.sub(r"strftime\('%Y',\s*(\w+)\)", r"TO_CHAR(\1::date, 'YYYY')", sql_pg, flags=re.IGNORECASE)
+        # Converte placeholders ? do SQLite para %s do PostgreSQL
+        sql_pg = sql_pg.replace("?", "%s")
 
         # Se for INSERT e não tiver RETURNING, adiciona RETURNING id para emular cursor.lastrowid
         is_insert = sql_pg.strip().upper().startswith("INSERT INTO")
@@ -66,7 +66,9 @@ class PostgresCursorWrapper:
         return self
 
     def executemany(self, sql, seq_of_params):
-        sql_pg = sql.replace("?", "%s")
+        sql_pg = re.sub(r"strftime\('%m',\s*([^)]+)\)", r"TO_CHAR(\1::date, 'MM')", sql, flags=re.IGNORECASE)
+        sql_pg = re.sub(r"strftime\('%Y',\s*([^)]+)\)", r"TO_CHAR(\1::date, 'YYYY')", sql_pg, flags=re.IGNORECASE)
+        sql_pg = sql_pg.replace("?", "%s")
         self.cur.executemany(sql_pg, seq_of_params)
         return self
 

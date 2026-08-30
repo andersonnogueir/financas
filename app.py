@@ -394,6 +394,13 @@ def get_dashboard():
         LIMIT 6
     """, (user_id, limite_7d_str))
     alertas = [dict(row) for row in cursor.fetchall()]
+    for a in alertas:
+        if a.get('data') and isinstance(a['data'], (date, datetime)):
+            a['data'] = a['data'].strftime('%Y-%m-%d')
+        elif a.get('data'):
+            a['data'] = str(a['data'])[:10]
+        if 'valor' in a and a['valor'] is not None:
+            a['valor'] = float(a['valor'])
 
     conn.close()
 
@@ -593,6 +600,13 @@ def list_transacoes():
     cursor = conn.cursor()
     cursor.execute(query, params)
     transacoes = [dict(row) for row in cursor.fetchall()]
+    for t in transacoes:
+        if t.get('data') and isinstance(t['data'], (date, datetime)):
+            t['data'] = t['data'].strftime('%Y-%m-%d')
+        elif t.get('data'):
+            t['data'] = str(t['data'])[:10]
+        if 'valor' in t and t['valor'] is not None:
+            t['valor'] = float(t['valor'])
     conn.close()
 
     return jsonify(transacoes)
@@ -1041,10 +1055,10 @@ def create_categoria():
 
     conn = database.get_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO categorias (user_id, nome, tipo, icone, cor)
-        VALUES (?, ?, ?, ?, ?)
-    """, (user_id, nome, tipo, icone, cor))
+    cursor.execute(
+        "INSERT INTO categorias (user_id, nome, tipo, icone, cor) VALUES (?, ?, ?, ?, ?)",
+        (user_id, nome, tipo, icone, cor)
+    )
     conn.commit()
     novo_id = cursor.lastrowid
     conn.close()
@@ -1065,23 +1079,17 @@ def export_csv():
     conn = database.get_connection()
     cursor = conn.cursor()
 
-    query = """
-        SELECT 
-            t.data as "Data",
-            t.tipo as "Tipo",
-            t.descricao as "Descrição",
-            t.valor as "Valor (R$)",
-            t.status as "Status",
-            c.nome as "Categoria",
-            cb.nome as "Conta Origem",
-            cbd.nome as "Conta Destino",
-            t.observacoes as "Observações"
-        FROM transacoes t
-        LEFT JOIN categorias c ON t.categoria_id = c.id
-        LEFT JOIN contas cb ON t.conta_id = cb.id
-        LEFT JOIN contas cbd ON t.conta_destino_id = cbd.id
-        WHERE t.user_id = ?
-    """
+    query = (
+        "SELECT "
+        "t.data as \"Data\", t.tipo as \"Tipo\", t.descricao as \"Descrição\", "
+        "t.valor as \"Valor (R$)\", t.status as \"Status\", c.nome as \"Categoria\", "
+        "cb.nome as \"Conta Origem\", cbd.nome as \"Conta Destino\", t.observacoes as \"Observações\" "
+        "FROM transacoes t "
+        "LEFT JOIN categorias c ON t.categoria_id = c.id "
+        "LEFT JOIN contas cb ON t.conta_id = cb.id "
+        "LEFT JOIN contas cbd ON t.conta_destino_id = cbd.id "
+        "WHERE t.user_id = ?"
+    )
     params = [user_id]
     if mes and ano:
         query += " AND strftime('%m', t.data) = ? AND strftime('%Y', t.data) = ?"
