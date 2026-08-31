@@ -57,8 +57,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, senha: string) => {
     try {
       const res = await api.post('/api/auth/login', { email, senha });
-      if (res.data && res.data.success && res.data.token) {
-        await authStorage.saveToken(res.data.token);
+      if (res.data && res.data.success) {
+        if (res.data.token) {
+          await authStorage.saveToken(res.data.token);
+        }
         setUser(res.data.user);
         return { success: true };
       }
@@ -71,8 +73,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (nome: string, email: string, senha: string) => {
     try {
       const res = await api.post('/api/auth/register', { nome, email, senha });
-      if (res.data && res.data.success && res.data.token) {
-        await authStorage.saveToken(res.data.token);
+      if (res.data && res.data.success) {
+        if (res.data.token) {
+          await authStorage.saveToken(res.data.token);
+        }
         setUser(res.data.user);
         return { success: true };
       }
@@ -85,8 +89,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithGoogle = async (payload: { email: string; nome: string; avatar_url?: string; credential?: string }) => {
     try {
       const res = await api.post('/api/auth/google', payload);
-      if (res.data && res.data.success && res.data.token) {
-        await authStorage.saveToken(res.data.token);
+      if (res.data && res.data.success) {
+        if (res.data.token) {
+          await authStorage.saveToken(res.data.token);
+        }
         setUser(res.data.user);
         return { success: true };
       }

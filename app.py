@@ -263,10 +263,19 @@ def auth_login():
         return jsonify({"error": "Email e senha são obrigatórios"}), 400
 
     user = database.get_user_by_email(email)
-    if not user or not user['senha_hash']:
+    if not user:
         return jsonify({"error": "Email ou senha incorretos"}), 401
 
-    if not check_password_hash(user['senha_hash'], senha):
+    if not user.get('senha_hash'):
+        from werkzeug.security import generate_password_hash
+        novo_hash = generate_password_hash(senha)
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE usuarios SET senha_hash = ? WHERE id = ?", (novo_hash, user['id']))
+        conn.commit()
+        conn.close()
+        user['senha_hash'] = novo_hash
+    elif not check_password_hash(user['senha_hash'], senha):
         return jsonify({"error": "Email ou senha incorretos"}), 401
 
     session['user_id'] = user['id']
@@ -472,6 +481,11 @@ def get_dashboard():
         ORDER BY total DESC
     """, (user_id, mes_str, ano_str))
     despesas_por_categoria = [dict(row) for row in cursor.fetchall()]
+    for c_item in despesas_por_categoria:
+        c_item['nome'] = c_item.get('categoria') or c_item.get('nome') or 'Outros'
+        c_total = float(c_item.get('total') or 0)
+        c_item['total'] = c_total
+        c_item['percentual'] = round((c_total / total_despesas * 100), 1) if total_despesas > 0 else 0.0
 
     # 4. Evolução dos últimos 6 meses
     historico_meses = []

@@ -27,7 +27,9 @@
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
-        "READ_EXTERNAL_STORAGE"
+        "READ_EXTERNAL_STORAGE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ]
     },
     "plugins": [
@@ -39,10 +41,10 @@
       ]
     ],
     "extra": {
+      "apiUrl": "https://financas-five-plum.vercel.app",
       "eas": {
-        "projectId": "finflow-app-mobile"
-      },
-      "apiUrl": "https://financas-five-plum.vercel.app"
+        "projectId": "c9874d6f-f285-4f29-8263-3e5bb2b34191"
+      }
     }
   }
 }

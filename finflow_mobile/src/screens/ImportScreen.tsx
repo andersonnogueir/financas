@@ -251,7 +251,7 @@ export const ImportScreen = () => {
                       { color: item.tipo === 'receita' ? colors.success : colors.danger },
                     ]}
                   >
-                    {item.tipo === 'receita' ? '+' : '-'} R$ {item.valor.toFixed(2)}
+                    {item.tipo === 'receita' ? '+' : '-'} R$ {Number(item.valor || 0).toFixed(2)}
                   </Text>
                 </TouchableOpacity>
               );

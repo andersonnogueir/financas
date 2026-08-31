@@ -209,20 +209,26 @@ export const DashboardScreen = ({ navigation }: any) => {
 
         <View style={[styles.cardSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           {data?.despesas_por_categoria && data.despesas_por_categoria.length > 0 ? (
-            data.despesas_por_categoria.slice(0, 5).map((cat, idx) => (
-              <View key={idx} style={styles.categoryItem}>
-                <View style={styles.catLeft}>
-                  <View style={[styles.catColorDot, { backgroundColor: cat.cor || colors.primary }]} />
-                  <Text style={[styles.catName, { color: colors.text }]} numberOfLines={1}>
-                    {cat.nome}
-                  </Text>
+            data.despesas_por_categoria.slice(0, 5).map((cat, idx) => {
+              const catNome = cat.nome || (cat as any).categoria || 'Sem categoria';
+              const catTotal = Number(cat.total || 0);
+              const totalDesp = Number(data?.total_despesas || 0);
+              const catPercent = cat.percentual !== undefined ? Number(cat.percentual) : (totalDesp > 0 ? (catTotal / totalDesp * 100) : 0);
+              return (
+                <View key={idx} style={styles.categoryItem}>
+                  <View style={styles.catLeft}>
+                    <View style={[styles.catColorDot, { backgroundColor: cat.cor || colors.primary }]} />
+                    <Text style={[styles.catName, { color: colors.text }]} numberOfLines={1}>
+                      {catNome}
+                    </Text>
+                  </View>
+                  <View style={styles.catRight}>
+                    <Text style={[styles.catAmount, { color: colors.text }]}>{formatCurrency(catTotal)}</Text>
+                    <Text style={[styles.catPercent, { color: colors.textMuted }]}>{catPercent.toFixed(1)}%</Text>
+                  </View>
                 </View>
-                <View style={styles.catRight}>
-                  <Text style={[styles.catAmount, { color: colors.text }]}>{formatCurrency(cat.total)}</Text>
-                  <Text style={[styles.catPercent, { color: colors.textMuted }]}>{cat.percentual.toFixed(1)}%</Text>
-                </View>
-              </View>
-            ))
+              );
+            })
           ) : (
             <Text style={[styles.emptyText, { color: colors.textMuted }]}>Sem despesas registradas no mês.</Text>
           )}
