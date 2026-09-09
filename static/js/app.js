@@ -1657,25 +1657,33 @@ let selectedOpenFinanceBank = null;
 let supportedBanksList = [];
 
 async function setupOpenFinanceModalHandlers() {
-  const btnConfirm = document.getElementById('btn-confirm-open-finance-connect');
-  if (!btnConfirm) return;
+  const btnLive = document.getElementById('btn-connect-pluggy-live');
+  const btnSandbox = document.getElementById('btn-confirm-sandbox-connect');
+  const btnDesconectar = document.getElementById('btn-desconectar-banco-modal');
 
-  btnConfirm.addEventListener('click', async () => {
+  // 1. CONEXÃO AO VIVO (BANCO REAL VIA PLUGGY)
+  btnLive?.addEventListener('click', async () => {
     const contaId = document.getElementById('open-finance-target-conta-id')?.value;
     if (!contaId) {
       Swal.fire({ icon: 'warning', title: 'Atenção', text: 'Nenhuma conta bancária selecionada.' });
       return;
     }
 
-    // 1. Tenta verificar se há credenciais Live (Pluggy Connect Token)
+    Swal.fire({
+      title: 'Iniciando Open Finance...',
+      text: 'Comunicando com o Banco Central e autenticador Pluggy.ai...',
+      allowOutsideClick: false,
+      didOpen: () => { Swal.showLoading(); }
+    });
+
     try {
       const tokenRes = await fetch('/api/open-finance/connect-token');
       const tokenData = await tokenRes.json();
+      Swal.close();
 
       if (tokenData.success && tokenData.connectToken && typeof PluggyConnect !== 'undefined') {
-        // Modo Oficial ao Vivo (Open Finance Brasil via Pluggy)
         closeModal('modal-open-finance');
-        
+
         const pluggyConnect = new PluggyConnect({
           connectToken: tokenData.connectToken,
           includeSandbox: true,
@@ -1683,7 +1691,14 @@ async function setupOpenFinanceModalHandlers() {
             try {
               const itemId = itemData.item ? itemData.item.id : itemData.id;
               const connectorName = itemData.item?.connector?.name || 'pluggy';
-              
+
+              Swal.fire({
+                title: 'Vinculando Conta...',
+                text: 'Registrando conexão Open Finance segura.',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+              });
+
               await fetch('/api/open-finance/save-connection', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1693,12 +1708,12 @@ async function setupOpenFinanceModalHandlers() {
                   banco_id: connectorName.toLowerCase()
                 })
               });
-              
+
               await loadAllData();
               Swal.fire({
                 icon: 'success',
-                title: 'Banco Conectado ao Vivo!',
-                text: 'Sua conta bancária real foi vinculada com sucesso via Open Finance Brasil (Modo Somente Leitura)!',
+                title: 'Banco Real Conectado!',
+                text: 'Sua conta bancária foi vinculada com sucesso via Open Finance Brasil! Agora você pode sincronizar seus extratos reais.',
                 confirmButtonColor: '#4f46e5'
               });
             } catch (saveErr) {
@@ -1707,6 +1722,11 @@ async function setupOpenFinanceModalHandlers() {
           },
           onError: (error) => {
             console.error('Pluggy Connect Error:', error);
+            Swal.fire({
+              icon: 'error',
+              title: 'Erro na Conexão Bancária',
+              text: error?.message || 'Não foi possível concluir a autenticação no banco.'
+            });
           },
           onClose: () => {
             console.log('Pluggy Connect fechado pelo usuário.');
@@ -1714,15 +1734,43 @@ async function setupOpenFinanceModalHandlers() {
         });
 
         pluggyConnect.init();
-        return;
+      } else {
+        // Exibe diagnóstico detalhado
+        Swal.fire({
+          icon: 'warning',
+          title: 'Atenção: Chaves da Pluggy Pendentes',
+          html: `
+            <div class="text-left space-y-3 text-xs text-slate-600 dark:text-slate-300">
+              <p class="font-semibold text-rose-500">${tokenData.error || 'Não foi possível obter o token da Pluggy.'}</p>
+              <div class="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl space-y-1.5 border border-slate-200 dark:border-slate-700">
+                <p class="font-bold text-slate-800 dark:text-white">Como ativar a conexão com seu banco real:</p>
+                <p><b>1. Na Vercel:</b> Acesse seu projeto ➔ <b>Settings</b> ➔ <b>Environment Variables</b> e adicione <code>PLUGGY_CLIENT_ID</code> e <code>PLUGGY_CLIENT_SECRET</code>.</p>
+                <p><b>2. Redeploy:</b> Acesse a aba <b>Deployments</b> ➔ clique nos <code>...</code> ➔ <b>Redeploy</b> para aplicar as novas variáveis.</p>
+                <p><b>3. No Local (Localhost):</b> Crie um arquivo <code>.env</code> na raiz do projeto com as chaves.</p>
+              </div>
+            </div>
+          `,
+          confirmButtonText: 'Entendido',
+          confirmButtonColor: '#4f46e5'
+        });
       }
-    } catch (tokenErr) {
-      console.log('Modo Sandbox ativo:', tokenErr);
+    } catch (err) {
+      Swal.close();
+      console.error('Erro ao chamar connect-token:', err);
+      Swal.fire({ icon: 'error', title: 'Erro', text: 'Falha na comunicação com o servidor.' });
+    }
+  });
+
+  // 2. CONEXÃO SANDBOX (SIMULADOR DE DEMONSTRAÇÃO)
+  btnSandbox?.addEventListener('click', async () => {
+    const contaId = document.getElementById('open-finance-target-conta-id')?.value;
+    if (!contaId) {
+      Swal.fire({ icon: 'warning', title: 'Atenção', text: 'Nenhuma conta selecionada.' });
+      return;
     }
 
-    // 2. Modo Sandbox de Alta Fidelidade (Localhost / Demonstração)
     if (!selectedOpenFinanceBank) {
-      Swal.fire({ icon: 'warning', title: 'Selecione um Banco', text: 'Por favor, escolha uma instituição financeira na lista.' });
+      Swal.fire({ icon: 'warning', title: 'Selecione um Banco', text: 'Por favor, clique em um dos bancos da lista para simular o extrato.' });
       return;
     }
 
@@ -1743,8 +1791,8 @@ async function setupOpenFinanceModalHandlers() {
         await loadAllData();
         Swal.fire({
           icon: 'success',
-          title: 'Banco Conectado com Sucesso!',
-          text: `Sua conta foi vinculada ao ${selectedOpenFinanceBank.nome} via Open Finance. Você já pode sincronizar seus extratos com 1 clique!`,
+          title: 'Modo Simulado Ativado!',
+          text: `A conta foi vinculada ao ${selectedOpenFinanceBank.nome} no modo Simulador/Sandbox. Ao clicar em Sincronizar, a IA gerará lançamentos fictícios de alta fidelidade para você testar.`,
           confirmButtonColor: '#4f46e5'
         });
       } else {
@@ -1755,18 +1803,84 @@ async function setupOpenFinanceModalHandlers() {
       Swal.fire({ icon: 'error', title: 'Erro', text: 'Falha na comunicação com o servidor.' });
     }
   });
+
+  // 3. DESCONECTAR BANCO
+  btnDesconectar?.addEventListener('click', async () => {
+    const contaId = document.getElementById('open-finance-target-conta-id')?.value;
+    if (!contaId) return;
+
+    const result = await Swal.fire({
+      title: 'Desconectar Banco?',
+      text: 'A conta voltará ao modo manual. Nenhum lançamento já importado será apagado.',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      confirmButtonText: 'Sim, desconectar',
+      cancelButtonText: 'Cancelar'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const res = await fetch('/api/open-finance/desconectar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conta_id: parseInt(contaId) })
+        });
+        const data = await res.json();
+        if (data.success) {
+          closeModal('modal-open-finance');
+          await loadAllData();
+          Swal.fire({ icon: 'success', title: 'Desconectado', text: 'A integração bancária foi removida com sucesso.', timer: 1500, showConfirmButton: false });
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  });
 }
 
 async function abrirModalOpenFinance(contaId) {
   document.getElementById('open-finance-target-conta-id').value = contaId;
   const container = document.getElementById('grid-bancos-open-finance');
+  const statusContainer = document.getElementById('open-finance-current-status');
+  const btnDesconectar = document.getElementById('btn-desconectar-banco-modal');
   selectedOpenFinanceBank = null;
+
+  const conta = state.contas.find(c => c.id === contaId);
+  const isConectada = conta && conta.integracao_status === 'conectado';
+  const isLive = conta && (conta.integracao_tipo === 'pluggy_live' || Boolean(conta.integracao_item_id));
+
+  if (statusContainer) {
+    if (isConectada) {
+      statusContainer.innerHTML = `
+        <div class="flex items-center gap-2">
+          <div class="w-2.5 h-2.5 rounded-full ${isLive ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse"></div>
+          <div>
+            <p class="font-bold text-slate-800 dark:text-white">Status: ${isLive ? '🟢 Banco Real Conectado (Pluggy Live)' : '🟡 Modo Simulador (Sandbox)'}</p>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">Instituição: <b>${conta.banco_id ? conta.banco_id.toUpperCase() : 'Bancária'}</b></p>
+          </div>
+        </div>
+      `;
+      btnDesconectar?.classList.remove('hidden');
+    } else {
+      statusContainer.innerHTML = `
+        <div class="flex items-center gap-2">
+          <div class="w-2.5 h-2.5 rounded-full bg-slate-400"></div>
+          <div>
+            <p class="font-bold text-slate-800 dark:text-white">Status: ⚪ Modo Manual (Sem Integração)</p>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">Escolha uma das opções abaixo para sincronizar extratos</p>
+          </div>
+        </div>
+      `;
+      btnDesconectar?.classList.add('hidden');
+    }
+  }
 
   if (container) {
     container.innerHTML = `
-      <div class="col-span-full py-6 text-center text-xs text-slate-400">
-        <i data-lucide="refresh-cw" class="w-5 h-5 mx-auto animate-spin mb-1 text-indigo-500"></i>
-        <span>Carregando catálogo de bancos...</span>
+      <div class="col-span-full py-4 text-center text-xs text-slate-400">
+        <i data-lucide="refresh-cw" class="w-4 h-4 mx-auto animate-spin mb-1 text-indigo-500"></i>
+        <span>Carregando bancos...</span>
       </div>
     `;
     lucide.createIcons();
@@ -1783,7 +1897,6 @@ async function abrirModalOpenFinance(contaId) {
       }
     }
 
-    const conta = state.contas.find(c => c.id === contaId);
     const bancoAtualId = conta?.banco_id;
 
     if (container) {
@@ -1792,13 +1905,13 @@ async function abrirModalOpenFinance(contaId) {
         if (isSelected) selectedOpenFinanceBank = b;
 
         return `
-          <button type="button" onclick="selectOpenFinanceBank('${b.id}')" id="bank-card-${b.id}" class="bank-select-card p-3 rounded-2xl border text-left transition flex flex-col justify-between gap-2 ${isSelected ? 'border-indigo-600 ring-2 ring-indigo-500/20 bg-indigo-50/40 dark:bg-indigo-950/40' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 hover:border-slate-300 dark:hover:border-slate-600'}">
-            <div class="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold shadow-sm" style="background-color: ${b.cor};">
-              <i data-lucide="${b.icone || 'landmark'}" class="w-4 h-4"></i>
+          <button type="button" onclick="selectOpenFinanceBank('${b.id}')" id="bank-card-${b.id}" class="bank-select-card p-2.5 rounded-xl border text-left transition flex items-center gap-2.5 ${isSelected ? 'border-indigo-600 ring-2 ring-indigo-500/20 bg-indigo-50/40 dark:bg-indigo-950/40' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 hover:border-slate-300 dark:hover:border-slate-600'}">
+            <div class="w-7 h-7 rounded-lg shrink-0 flex items-center justify-center text-white text-[10px] font-bold shadow-sm" style="background-color: ${b.cor};">
+              <i data-lucide="${b.icone || 'landmark'}" class="w-3.5 h-3.5"></i>
             </div>
-            <div>
-              <p class="text-xs font-bold text-slate-900 dark:text-white leading-tight">${b.nome}</p>
-              <p class="text-[10px] text-slate-400 mt-0.5">Cód. ${b.codigo}</p>
+            <div class="overflow-hidden">
+              <p class="text-xs font-bold text-slate-900 dark:text-white truncate">${b.nome}</p>
+              <p class="text-[10px] text-slate-400 truncate">Cód. ${b.codigo}</p>
             </div>
           </button>
         `;
@@ -1828,6 +1941,7 @@ function selectOpenFinanceBank(bankId) {
     activeCard.classList.add('border-indigo-600', 'ring-2', 'ring-indigo-500/20', 'bg-indigo-50/40', 'dark:bg-indigo-950/40');
   }
 }
+
 
 async function excluirConta(id) {
   const result = await Swal.fire({

@@ -372,9 +372,23 @@ def get_pluggy_api_key():
 
 def create_pluggy_connect_token(item_id=None):
     """Gera um token efêmero de conexão para o Pluggy Connect Widget no frontend."""
+    client_id = os.environ.get("PLUGGY_CLIENT_ID", "").strip()
+    client_secret = os.environ.get("PLUGGY_CLIENT_SECRET", "").strip()
+
+    if not client_id or not client_secret:
+        return {
+            "success": False,
+            "mode": "sandbox",
+            "error": "Variáveis PLUGGY_CLIENT_ID ou PLUGGY_CLIENT_SECRET não encontradas no servidor. Se você acabou de cadastrá-las na Vercel, é necessário fazer um Redeploy para ativá-las."
+        }
+
     api_key = get_pluggy_api_key()
     if not api_key:
-        return {"success": False, "mode": "sandbox", "error": "Credenciais Pluggy não configuradas. Usando modo Sandbox Local."}
+        return {
+            "success": False,
+            "mode": "sandbox",
+            "error": "Não foi possível autenticar na Pluggy. Verifique se o Client ID e Client Secret estão corretos no painel da Pluggy.ai."
+        }
 
     try:
         url = f"{PLUGGY_BASE_URL}/connect_token"
@@ -398,7 +412,8 @@ def create_pluggy_connect_token(item_id=None):
             }
     except Exception as e:
         print(f"[OpenFinance] Erro ao gerar connectToken no Pluggy: {e}")
-        return {"success": False, "mode": "sandbox", "error": str(e)}
+        return {"success": False, "mode": "sandbox", "error": f"Erro ao comunicar com Pluggy.ai: {str(e)}"}
+
 
 def fetch_pluggy_accounts(item_id):
     """Consulta as contas associadas a uma conexão Pluggy (Item)."""
