@@ -45,9 +45,6 @@
   <!-- SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-  <!-- Pluggy Open Finance Connect Widget -->
-  <script src="https://cdn.pluggy.ai/pluggy-connect/v1.0.0/pluggy-connect.js"></script>
-
   <!-- Custom CSS -->
   <link rel="stylesheet" href="/static/css/styles.css">
 </head>
@@ -632,14 +629,14 @@
       <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/30">
-            <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+            <i data-lucide="file-up" class="w-5 h-5"></i>
           </div>
           <div>
             <h3 id="modal-import-titulo" class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              Sincronização & Importação de Extrato
-              <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold uppercase tracking-wider">Open Finance & IA</span>
+              Importar Extrato Bancário
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold uppercase tracking-wider">IA & OFX/CSV</span>
             </h3>
-            <p id="modal-import-subtitulo" class="text-xs text-slate-500 dark:text-slate-400">Consulte diretamente pela API do seu banco ou envie arquivos de extrato</p>
+            <p id="modal-import-subtitulo" class="text-xs text-slate-500 dark:text-slate-400">Arraste o extrato exportado do seu banco (OFX, CSV ou TXT)</p>
           </div>
         </div>
 
@@ -648,111 +645,48 @@
         </button>
       </div>
 
-      <!-- ETAPA 1: ESCOLHA DO MÉTODO (SINCRONIZAÇÃO DIRETA API VS UPLOAD MANUAL) -->
+      <!-- ETAPA 1: SELEÇÃO DA CONTA E UPLOAD DO EXTRATO -->
       <div id="import-etapa-1" class="p-6 space-y-5 overflow-y-auto">
         
-        <!-- Abas Seletoras de Método -->
-        <div class="grid grid-cols-2 gap-2 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700">
-          <button id="tab-import-api" type="button" class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-md shadow-indigo-600/30">
-            <i data-lucide="zap" class="w-4 h-4"></i>
-            <span>Sincronização Direta (API / Open Finance)</span>
-          </button>
-          <button id="tab-import-file" type="button" class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200">
-            <i data-lucide="file-up" class="w-4 h-4"></i>
-            <span>Upload de Arquivo (OFX / CSV)</span>
-          </button>
+        <!-- Seleção de Conta -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">1. Selecione a Conta Bancária de Destino *</label>
+          <select id="import-conta-id" required class="w-full px-3.5 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+            <!-- Preenchido dinamicamente -->
+          </select>
         </div>
 
-        <!-- CONTEÚDO MÉTODO 1: SINCRONIZAÇÃO DIRETA VIA API -->
-        <div id="import-pane-api" class="space-y-4">
-          <div>
-            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">1. Selecione a Conta Bancária Integrada *</label>
-            <select id="import-api-conta-id" class="w-full px-3.5 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
-              <!-- Preenchido dinamicamente -->
-            </select>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">2. Período de Consulta</label>
-              <select id="import-api-dias" class="w-full px-3.5 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
-                <option value="7">Últimos 7 dias</option>
-                <option value="15">Últimos 15 dias</option>
-                <option value="30" selected>Últimos 30 dias (Recomendado)</option>
-                <option value="60">Últimos 60 dias</option>
-              </select>
+        <!-- Dropzone -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">2. Selecione ou arraste o arquivo do extrato *</label>
+          <div id="import-dropzone" class="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-2xl p-8 text-center cursor-pointer transition bg-slate-50/50 dark:bg-slate-800/20 group">
+            <input type="file" id="import-file-input" accept=".ofx,.csv,.txt" class="hidden">
+            <div class="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition">
+              <i data-lucide="upload-cloud" class="w-7 h-7"></i>
             </div>
-            <div>
-              <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Segurança & Conexão</label>
-              <div class="px-3.5 py-2.5 text-xs rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-                <i data-lucide="shield-check" class="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400"></i>
-                <span class="truncate">Modo Consulta Somente Leitura</span>
-              </div>
+            <p class="text-sm font-bold text-slate-800 dark:text-slate-200">Arraste seu arquivo OFX ou CSV aqui</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">ou clique para procurar no seu computador / celular</p>
+            
+            <div class="flex flex-wrap items-center justify-center gap-2 mt-4">
+              <span class="text-[11px] px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-medium">.OFX (Nubank, Inter, Itaú, Bradesco, BB, Santander, Caixa, C6...)</span>
+              <span class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">.CSV / .TXT</span>
             </div>
           </div>
-
-          <!-- Card Informativo de Bancos Suportados -->
-          <div class="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 flex items-center justify-between gap-3">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-indigo-600/10 dark:bg-indigo-600/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
-                <i data-lucide="landmark" class="w-5 h-5"></i>
-              </div>
-              <div>
-                <p class="text-xs font-bold text-indigo-950 dark:text-indigo-200">Bancos Homologados via Open Finance</p>
-                <p class="text-[11px] text-indigo-700 dark:text-indigo-300">Nubank, Inter, Bradesco, Banco do Brasil, Itaú, Santander, Caixa, C6 e Cooperativas.</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Botão Disparar Sincronização -->
-          <button id="btn-import-sync-api" type="button" class="w-full py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 shadow-lg shadow-indigo-600/30 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2.5">
-            <i data-lucide="zap" class="w-4 h-4"></i>
-            <span>Sincronizar Extrato via API Bancária Agora</span>
-          </button>
         </div>
 
-        <!-- CONTEÚDO MÉTODO 2: UPLOAD DE ARQUIVO (OFX/CSV/TXT) -->
-        <div id="import-pane-file" class="space-y-4 hidden">
-          <!-- Seleção de Conta -->
-          <div>
-            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">1. Selecione a Conta Bancária de Destino *</label>
-            <select id="import-conta-id" required class="w-full px-3.5 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
-              <!-- Preenchido dinamicamente -->
-            </select>
-          </div>
-
-          <!-- Dropzone -->
-          <div>
-            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">2. Selecione ou arraste o arquivo do extrato *</label>
-            <div id="import-dropzone" class="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-2xl p-8 text-center cursor-pointer transition bg-slate-50/50 dark:bg-slate-800/20 group">
-              <input type="file" id="import-file-input" accept=".ofx,.csv,.txt" class="hidden">
-              <div class="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition">
-                <i data-lucide="upload-cloud" class="w-7 h-7"></i>
-              </div>
-              <p class="text-sm font-bold text-slate-800 dark:text-slate-200">Arraste seu arquivo OFX ou CSV aqui</p>
-              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">ou clique para procurar no seu computador</p>
-              
-              <div class="flex flex-wrap items-center justify-center gap-2 mt-4">
-                <span class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">.OFX (Nubank, Itaú, Bradesco, BB, Inter, Santander, Caixa...)</span>
-                <span class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">.CSV / .TXT</span>
-              </div>
+        <!-- Indicador de Arquivo Selecionado -->
+        <div id="import-selected-file-info" class="hidden p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800/70 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <i data-lucide="file-check-2" class="w-5 h-5 text-indigo-600 dark:text-indigo-400"></i>
+            <div>
+              <p id="import-file-name" class="text-xs font-bold text-indigo-950 dark:text-indigo-200">extrato.ofx</p>
+              <p id="import-file-size" class="text-[10px] text-indigo-600 dark:text-indigo-400">12.5 KB</p>
             </div>
           </div>
-
-          <!-- Indicador de Arquivo Selecionado -->
-          <div id="import-selected-file-info" class="hidden p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800/70 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <i data-lucide="file-check-2" class="w-5 h-5 text-indigo-600 dark:text-indigo-400"></i>
-              <div>
-                <p id="import-file-name" class="text-xs font-bold text-indigo-950 dark:text-indigo-200">extrato.ofx</p>
-                <p id="import-file-size" class="text-[10px] text-indigo-600 dark:text-indigo-400">12.5 KB</p>
-              </div>
-            </div>
-            <button id="btn-import-process-file" class="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5">
-              <span>Analisar e Pré-visualizar</span>
-              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
-            </button>
-          </div>
+          <button id="btn-import-process-file" class="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5">
+            <span>Analisar com IA</span>
+            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+          </button>
         </div>
 
       </div>
@@ -942,22 +876,6 @@
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Banco / Open Finance</label>
-            <select id="conta-banco-id" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
-              <option value="">Nenhum (Manual / Outro)</option>
-              <option value="nubank">🟣 Nubank</option>
-              <option value="inter">🟠 Banco Inter</option>
-              <option value="bradesco">🔴 Banco Bradesco</option>
-              <option value="bb">🟡 Banco do Brasil</option>
-              <option value="itau">🟧 Itaú Unibanco</option>
-              <option value="santander">🔴 Santander</option>
-              <option value="caixa">🔵 Caixa Econômica</option>
-              <option value="c6">⚫ C6 Bank</option>
-              <option value="sicoob">🟢 Sicoob</option>
-              <option value="btg">🔵 BTG Pactual</option>
-            </select>
-          </div>
-          <div>
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Tipo de Conta</label>
             <select id="conta-tipo" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
               <option value="Corrente">Conta Corrente</option>
@@ -967,11 +885,10 @@
               <option value="Outros">Outros</option>
             </select>
           </div>
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Instituição (Exibição)</label>
-          <input type="text" id="conta-instituicao" placeholder="Ex: Nubank, Itaú..." class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Instituição</label>
+            <input type="text" id="conta-instituicao" placeholder="Ex: Nubank, Itaú..." class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+          </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -997,91 +914,6 @@
           </button>
         </div>
       </form>
-    </div>
-  </div>
-
-  <!-- MODAL: CONECTAR BANCO VIA OPEN FINANCE -->
-  <div id="modal-open-finance" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
-    <div class="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-      <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-emerald-500 flex items-center justify-center text-white shadow-md">
-            <i data-lucide="shield-check" class="w-5 h-5"></i>
-          </div>
-          <div>
-            <h3 class="text-base font-bold text-slate-900 dark:text-white">Conexão Bancária & Open Finance</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400">Sincronização de extratos e saldos em tempo real</p>
-          </div>
-        </div>
-        <button class="btn-close-modal text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
-      </div>
-
-      <div class="p-6 space-y-4 overflow-y-auto">
-        <input type="hidden" id="open-finance-target-conta-id" value="">
-        
-        <!-- Status da Conta Atual -->
-        <div id="open-finance-current-status" class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 text-xs">
-          <!-- Injetado dinamicamente -->
-        </div>
-
-        <!-- Opção 1: CONECTAR AO VIVO (BANCO REAL) -->
-        <div class="p-4 rounded-2xl bg-gradient-to-br from-indigo-50/80 to-purple-50/80 dark:from-indigo-950/40 dark:to-purple-950/40 border-2 border-indigo-500/40 dark:border-indigo-500/30 space-y-3">
-          <div class="flex items-start justify-between">
-            <div>
-              <div class="flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded-md bg-indigo-600 text-white font-black text-[10px] uppercase tracking-wider">Recomendado</span>
-                <h4 class="text-sm font-bold text-slate-900 dark:text-white">Conectar com Meu Banco Real</h4>
-              </div>
-              <p class="text-xs text-slate-600 dark:text-slate-300 mt-1">
-                Abre o popup oficial da <b>Pluggy / Open Finance Brasil</b> para você fazer login no seu banco (Nubank, Inter, Itaú, Bradesco, etc.) com autorização somente leitura de extrato.
-              </p>
-            </div>
-          </div>
-          
-          <button id="btn-connect-pluggy-live" type="button" class="w-full py-3 px-4 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2">
-            <i data-lucide="zap" class="w-4 h-4"></i>
-            <span>Autorizar no Meu Banco Real (Popup Oficial)</span>
-          </button>
-        </div>
-
-        <!-- Opção 2: MODO DEMONSTRAÇÃO / SANDBOX -->
-        <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 space-y-3">
-          <div>
-            <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">Ou use o Simulador de Demonstração (Sandbox)</h4>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Escolha uma instituição abaixo para testar a IA com extratos fictícios de alta fidelidade:
-            </p>
-          </div>
-
-          <div id="grid-bancos-open-finance" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            <!-- Injetado dinamicamente -->
-          </div>
-
-          <button id="btn-confirm-sandbox-connect" type="button" class="w-full py-2 px-3 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-2">
-            <i data-lucide="play" class="w-3.5 h-3.5 text-amber-500"></i>
-            <span>Vincular como Banco Simulado (Sandbox)</span>
-          </button>
-        </div>
-
-        <div class="p-3.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/40 flex items-start gap-2.5 text-[11px] text-emerald-800 dark:text-emerald-300">
-          <i data-lucide="lock" class="w-4 h-4 mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400"></i>
-          <p>
-            <b>Somente Leitura:</b> O FinFlow nunca tem acesso para movimentar seu dinheiro ou realizar pagamentos. Apenas consulta saldos e extratos via padrões oficiais do Banco Central.
-          </p>
-        </div>
-      </div>
-
-      <div class="p-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 bg-white dark:bg-slate-900">
-        <button id="btn-desconectar-banco-modal" type="button" class="px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition hidden flex items-center gap-1.5">
-          <i data-lucide="unlink" class="w-3.5 h-3.5"></i>
-          <span>Desconectar Banco</span>
-        </button>
-        <button type="button" class="btn-close-modal px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition ml-auto">
-          Fechar
-        </button>
-      </div>
     </div>
   </div>
 

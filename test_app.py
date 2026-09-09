@@ -113,7 +113,7 @@ class TestFinFlowBankImport(unittest.TestCase):
             "saldo_inicial": 500.00
         })
         self.assertEqual(res_conta.status_code, 201)
-        print("OK: Usuario e Conta bancaria criados para os testes de importacao")
+        print("OK: Usuario e Conta bancaria criados com sucesso")
 
     def test_02_parser_ofx_and_csv_unit(self):
         # Testar parser de OFX
@@ -195,151 +195,71 @@ class TestFinFlowBankImport(unittest.TestCase):
         self.assertEqual(t_nova['categoria_id'], 4)
         print("OK: Sistema de aprendizado continuo reconheceu regra memorizada no proximo extrato!")
 
-    def test_05_open_finance_bank_catalog(self):
+    def test_05_duplicate_detection_by_fitid(self):
         self.login_test_user()
-        res = self.app.get('/api/open-finance/bancos')
-        self.assertEqual(res.status_code, 200)
-        data = json.loads(res.data)
-        self.assertTrue(data['success'])
-        self.assertGreaterEqual(data['total'], 8)
-        
-        bank_ids = [b['id'] for b in data['bancos']]
-        self.assertIn('nubank', bank_ids)
-        self.assertIn('inter', bank_ids)
-        self.assertIn('bradesco', bank_ids)
-        self.assertIn('bb', bank_ids)
-        self.assertIn('itau', bank_ids)
-        self.assertIn('santander', bank_ids)
-        self.assertIn('caixa', bank_ids)
-        self.assertIn('c6', bank_ids)
-        print("OK: Catalogo Open Finance retornou todos os principais bancos brasileiros com metadados")
 
-    def test_06_open_finance_account_connection(self):
-        self.login_test_user()
-        # Conectar conta 1 ao Nubank
-        res_conn = self.app.post('/api/open-finance/conectar', json={
-            "conta_id": 1,
-            "banco_id": "nubank",
-            "agencia": "0001",
-            "conta": "98765-4",
-            "tipo": "open_finance_sandbox"
-        })
-        self.assertEqual(res_conn.status_code, 200)
-        conn_data = json.loads(res_conn.data)
-        self.assertTrue(conn_data['success'])
-        self.assertEqual(conn_data['banco']['id'], 'nubank')
+        # 1. Enviar arquivo OFX completo com transações que já foram importadas (FITID OFX-20260815-003)
+        res_preview = self.app.post('/api/import/preview', data={
+            'conta_id': '1',
+            'arquivo': (io.BytesIO(SAMPLE_OFX.encode('utf-8')), 'extrato_nubank.ofx')
+        }, content_type='multipart/form-data')
 
-        # Verificar se a conta reflete status conectado
-        res_contas = self.app.get('/api/contas')
-        contas = json.loads(res_contas.data)
-        conta_1 = next((c for c in contas if c['id'] == 1), None)
-        self.assertIsNotNone(conta_1)
-        self.assertEqual(conta_1['banco_id'], 'nubank')
-        self.assertEqual(conta_1['integracao_status'], 'conectado')
+        preview_data = json.loads(res_preview.data)
+        trans = preview_data['transacoes']
 
-        # Desconectar
-        res_desc = self.app.post('/api/open-finance/desconectar', json={"conta_id": 1})
-        self.assertEqual(res_desc.status_code, 200)
-        
-        # Reconectar para os próximos testes
-        self.app.post('/api/open-finance/conectar', json={
-            "conta_id": 1,
-            "banco_id": "nubank"
-        })
-        print("OK: Conexao e desconexao Open Finance com persistencia em banco validadas com sucesso")
+        # A transação do POSTO IPIRANGA (OFX-20260815-003) deve estar marcada como duplicada e desmarcada por padrão
+        t_ipiranga = next((t for t in trans if t['fitid'] == 'OFX-20260815-003'), None)
+        self.assertIsNotNone(t_ipiranga)
+        self.assertTrue(t_ipiranga['is_duplicada'])
+        self.assertFalse(t_ipiranga['selecionada'])
 
-    def test_07_open_finance_sync_and_ai_categorization(self):
-        self.login_test_user()
-        res_sync = self.app.post('/api/open-finance/sync/1', json={"dias": 30})
-        self.assertEqual(res_sync.status_code, 200)
-        sync_data = json.loads(res_sync.data)
-        self.assertTrue(sync_data['success'])
-        self.assertEqual(sync_data['origem'], 'api_banco')
-        self.assertGreater(len(sync_data['transacoes']), 0)
-
-        # Verificar se transações possuem FITIDs e sugestões por IA
-        transacoes = sync_data['transacoes']
-        for t in transacoes:
-            self.assertTrue(t['fitid'].startswith("OF-NUBANK-"))
-            self.assertIsNotNone(t['categoria_id'])
-            self.assertTrue(len(t['categoria_nome']) > 0)
-
-        # Validar categorização semântica específica
-        t_ifood = next((t for t in transacoes if "IFOOD" in t['descricao']), None)
+        # As outras não importadas ainda devem estar selecionadas
+        t_ifood = next((t for t in trans if t['fitid'] == 'OFX-20260810-001'), None)
         self.assertIsNotNone(t_ifood)
-        self.assertIn("Alimentação", t_ifood['categoria_nome'])
+        self.assertFalse(t_ifood['is_duplicada'])
+        self.assertTrue(t_ifood['selecionada'])
+        print("OK: Deteccao de duplicidade por FITID bloqueou re-importacao de transacoes repetidas")
 
-        t_uber = next((t for t in transacoes if "UBER" in t['descricao']), None)
-        self.assertIsNotNone(t_uber)
-        self.assertIn("Transporte", t_uber['categoria_nome'])
-
-        t_salario = next((t for t in transacoes if "SALARIO" in t['descricao']), None)
-        self.assertIsNotNone(t_salario)
-        self.assertIn("Salário", t_salario['categoria_nome'])
-
-        print("OK: Sincronizacao Open Finance direta via API alimentou motor de IA e categorizacao com precisao")
-
-    def test_08_open_finance_duplicate_detection(self):
+    def test_06_dashboard_and_export_after_import(self):
         self.login_test_user()
-        # 1. Executa primeiro sync
-        res_sync1 = self.app.post('/api/open-finance/sync/1', json={"dias": 30})
-        sync1 = json.loads(res_sync1.data)
-        trans1 = sync1['transacoes']
-        self.assertGreater(len(trans1), 2)
 
-        # 2. Confirma importação apenas das 2 primeiras transações
-        primeiras_duas = trans1[:2]
-        payload_confirm = {
+        # Importar restante do extrato
+        res_confirm = self.app.post('/api/import/confirm', json={
             "conta_id": 1,
             "transacoes": [
                 {
-                    "data": t['data'],
-                    "descricao": t['descricao'],
-                    "valor": t['valor'],
-                    "tipo": t['tipo'],
-                    "categoria_id": t['categoria_id'],
-                    "fitid": t['fitid'],
-                    "lembrar_regra": False
-                } for t in primeiras_duas
+                    "data": "2026-08-10",
+                    "descricao": "IFOOD *RESTAURANTE SABOR",
+                    "valor": 85.50,
+                    "tipo": "despesa",
+                    "categoria_id": 1,
+                    "fitid": "OFX-20260810-001"
+                },
+                {
+                    "data": "2026-08-05",
+                    "descricao": "CREDITO SALARIO MENSAL",
+                    "valor": 4500.00,
+                    "tipo": "receita",
+                    "categoria_id": 10,
+                    "fitid": "OFX-20260805-004"
+                }
             ]
-        }
-        res_conf = self.app.post('/api/import/confirm', json=payload_confirm)
-        self.assertEqual(res_conf.status_code, 200)
+        })
+        self.assertEqual(res_confirm.status_code, 200)
 
-        # 3. Executa segundo sync
-        res_sync2 = self.app.post('/api/open-finance/sync/1', json={"dias": 30})
-        sync2 = json.loads(res_sync2.data)
-        trans2 = sync2['transacoes']
-
-        # As 2 primeiras agora DEVEM vir marcadas como duplicadas e não selecionadas
-        t0 = trans2[0]
-        t1 = trans2[1]
-        self.assertTrue(t0['is_duplicada'], f"Transação {t0['descricao']} deveria ser identificada como duplicada")
-        self.assertFalse(t0['selecionada'])
-        self.assertTrue(t1['is_duplicada'], f"Transação {t1['descricao']} deveria ser identificada como duplicada")
-        self.assertFalse(t1['selecionada'])
-
-        # As demais NÃO devem ser duplicadas
-        t_restante = trans2[2]
-        self.assertFalse(t_restante['is_duplicada'])
-        self.assertTrue(t_restante['selecionada'])
-        print("OK: Deteccao de duplicatas por FITID barrou transacoes ja importadas na segunda sincronizacao")
-
-    def test_09_open_finance_confirm_import_and_balance_update(self):
-        self.login_test_user()
-        # Verificar que as transações sincronizadas e confirmadas atualizaram o extrato
-        res_trans = self.app.get('/api/transacoes')
-        self.assertEqual(res_trans.status_code, 200)
-        trans_list = json.loads(res_trans.data)
-        self.assertGreaterEqual(len(trans_list), 3) # Inclui transações dos testes anteriores
-
-        # Verificar resumo do Dashboard
-        res_dash = self.app.get('/api/dashboard/resumo')
+        # Consultar dashboard
+        res_dash = self.app.get('/api/dashboard/resumo?mes=8&ano=2026')
         self.assertEqual(res_dash.status_code, 200)
         dash = json.loads(res_dash.data)
-        self.assertTrue('saldo_consolidado_geral' in dash)
+        self.assertGreater(dash['total_receitas'], 0)
         self.assertGreater(dash['total_despesas'], 0)
-        print("OK: Transacoes bancarias sincronizadas atualizaram Dashboard e saldos em tempo real!")
+        self.assertGreater(dash['saldo_consolidado_geral'], 0)
+
+        # Exportar CSV do mês
+        res_csv = self.app.get('/api/export/csv?mes=8&ano=2026')
+        self.assertEqual(res_csv.status_code, 200)
+        self.assertIn("IFOOD", res_csv.data.decode('utf-8'))
+        print("OK: Dashboard recalculado e exportacao CSV validada com sucesso!")
 
 if __name__ == '__main__':
     unittest.main()

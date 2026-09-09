@@ -903,7 +903,7 @@ function editarTransacao(id) {
 
 // ========================================================
 // ========================================================
-// IMPORTAÇÃO BANCÁRIA INTELIGENTE & OPEN FINANCE
+// IMPORTAÇÃO BANCÁRIA INTELIGENTE (OFX / CSV / TXT COM IA)
 // ========================================================
 function setupImportEventListeners() {
   const dropzone = document.getElementById('import-dropzone');
@@ -914,56 +914,10 @@ function setupImportEventListeners() {
   const btnSelectAll = document.getElementById('btn-import-select-all');
   const btnUnselectAll = document.getElementById('btn-import-unselect-all');
 
-  const tabApi = document.getElementById('tab-import-api');
-  const tabFile = document.getElementById('tab-import-file');
-  const paneApi = document.getElementById('import-pane-api');
-  const paneFile = document.getElementById('import-pane-file');
-  const btnSyncApi = document.getElementById('btn-import-sync-api');
-
-  // Alternar abas do modal de importação
-  if (tabApi && tabFile && paneApi && paneFile) {
-    tabApi.addEventListener('click', () => {
-      tabApi.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-md shadow-indigo-600/30';
-      tabFile.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200';
-      paneApi.classList.remove('hidden');
-      paneFile.classList.add('hidden');
-    });
-
-    tabFile.addEventListener('click', () => {
-      tabFile.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-md shadow-indigo-600/30';
-      tabApi.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200';
-      paneFile.classList.remove('hidden');
-      paneApi.classList.add('hidden');
-    });
-  }
-
-  // Disparar sincronização direta via API Bancária
-  btnSyncApi?.addEventListener('click', async () => {
-    const contaId = document.getElementById('import-api-conta-id')?.value;
-    const dias = parseInt(document.getElementById('import-api-dias')?.value || '30');
-    if (!contaId) {
-      Swal.fire({ icon: 'warning', title: 'Selecione uma conta', text: 'Escolha a conta bancária para sincronizar o extrato.' });
-      return;
-    }
-    await sincronizarExtratoViaAPI(contaId, dias);
-  });
-
-  // Abrir modal de importação
+  // Abrir modal de importação pelos botões da interface
   ['btn-open-modal-import', 'btn-quick-import', 'btn-extrato-importar'].forEach(id => {
     document.getElementById(id)?.addEventListener('click', () => {
-      if (state.contas.length === 0) {
-        Swal.fire({
-          icon: 'info',
-          title: 'Cadastre uma Conta Primeiro',
-          text: 'Você precisa ter pelo menos uma conta bancária cadastrada para onde importar o extrato.',
-          confirmButtonColor: '#4f46e5'
-        }).then(() => {
-          document.getElementById('btn-quick-new-account')?.click();
-        });
-        return;
-      }
-      resetImportModal();
-      openModal('modal-import');
+      abrirModalImportacao();
     });
   });
 
@@ -1011,84 +965,35 @@ function setupImportEventListeners() {
 
   // Confirmar Importação Final
   btnConfirmFinal?.addEventListener('click', confirmImportTransactions);
-
-  // Inicializar handlers do modal Open Finance
-  setupOpenFinanceModalHandlers();
 }
 
-async function sincronizarExtratoViaAPI(contaId, dias = 30) {
-  state.import.contaId = contaId;
-
-  Swal.fire({
-    title: '<span class="flex items-center justify-center gap-2"><i data-lucide="refresh-cw" class="w-5 h-5 text-indigo-500 animate-spin"></i> Conectando à API Bancária...</span>',
-    html: `
-      <div class="text-xs text-slate-500 dark:text-slate-400 space-y-2 mt-2">
-        <p>Consultando transações via <b>Open Finance Brasil</b> (Modo Somente Leitura)...</p>
-        <p class="text-indigo-600 dark:text-indigo-400 font-semibold">Aplicando motor de Auto-Categorização com IA ✨</p>
-      </div>
-    `,
-    allowOutsideClick: false,
-    didOpen: () => {
-      Swal.showLoading();
-      lucide.createIcons();
-    }
-  });
-
-  try {
-    const res = await fetch(`/api/open-finance/sync/${contaId}?dias=${dias}`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
+function abrirModalImportacao(contaId = null) {
+  if (state.contas.length === 0) {
+    Swal.fire({
+      icon: 'info',
+      title: 'Cadastre uma Conta Primeiro',
+      text: 'Você precisa ter pelo menos uma conta bancária cadastrada para onde importar o extrato.',
+      confirmButtonColor: '#4f46e5'
+    }).then(() => {
+      document.getElementById('btn-quick-new-account')?.click();
     });
-
-    const data = await res.json();
-    Swal.close();
-
-    if (!res.ok || !data.success) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Falha na consulta bancária',
-        text: data.error || 'Não foi possível obter os dados da instituição financeira.'
-      });
-      return;
-    }
-
-    state.import.previewTransactions = data.transacoes;
-    renderImportPreviewTable(data);
-
-    // Mudar para Etapa 2 (Analisar e Consolidar)
-    document.getElementById('import-etapa-1')?.classList.add('hidden');
-    document.getElementById('import-etapa-2')?.classList.remove('hidden');
-
-    // Notificação discreta de sucesso
-    const toast = Swal.mixin({
-      toast: true,
-      position: 'top-end',
-      showConfirmButton: false,
-      timer: 3000
-    });
-    toast.fire({
-      icon: 'success',
-      title: `${data.total_transacoes} transações sincronizadas!`
-    });
-
-  } catch (err) {
-    Swal.close();
-    console.error('Erro na sincronização Open Finance:', err);
-    Swal.fire({ icon: 'error', title: 'Erro de conexão', text: 'Não foi possível comunicar com o servidor para sincronização bancária.' });
+    return;
   }
-}
 
-function sincronizarExtratoConta(contaId) {
   resetImportModal();
-  openModal('modal-import');
-  
-  // Seleciona a conta nos selects
-  const selectApi = document.getElementById('import-api-conta-id');
-  if (selectApi) selectApi.value = contaId;
 
-  // Dispara a sincronização
-  sincronizarExtratoViaAPI(contaId, 30);
+  const selectConta = document.getElementById('import-conta-id');
+  if (selectConta) {
+    selectConta.innerHTML = state.contas.map(c => `
+      <option value="${c.id}" ${contaId === c.id ? 'selected' : ''}>${c.nome} (${c.instituicao || c.tipo})</option>
+    `).join('');
+
+    if (contaId) selectConta.value = contaId;
+  }
+
+  openModal('modal-import');
 }
+
 
 function resetImportModal() {
   state.import.selectedFile = null;
@@ -1567,37 +1472,12 @@ function renderContasTab() {
           </div>
         </div>
 
-        <!-- Open Finance Badge & Ações de Conexão -->
-        <div class="mt-3.5 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-          <div class="flex items-center gap-2">
-            ${isConectada ? `
-              <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-              <div>
-                <span class="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">Open Finance Conectado</span>
-                ${c.ultimo_sync ? `<p class="text-[9px] text-slate-400">Sync: ${c.ultimo_sync}</p>` : ''}
-              </div>
-            ` : `
-              <div class="w-2 h-2 rounded-full bg-slate-400"></div>
-              <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Modo Manual</span>
-            `}
-          </div>
-
-          <div class="flex items-center gap-1.5">
-            ${isConectada ? `
-              <button onclick="sincronizarExtratoConta(${c.id})" title="Sincronizar extrato bancário agora" class="px-2.5 py-1 text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition flex items-center gap-1">
-                <i data-lucide="zap" class="w-3 h-3"></i>
-                <span>Sincronizar</span>
-              </button>
-              <button onclick="abrirModalOpenFinance(${c.id})" title="Alterar banco ou reconectar" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                <i data-lucide="settings-2" class="w-3.5 h-3.5"></i>
-              </button>
-            ` : `
-              <button onclick="abrirModalOpenFinance(${c.id})" class="px-2.5 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 rounded-lg border border-indigo-200/60 dark:border-indigo-800/40 transition flex items-center gap-1">
-                <i data-lucide="link" class="w-3 h-3"></i>
-                <span>Conectar Banco</span>
-              </button>
-            `}
-          </div>
+        <!-- Botão Ação Rápida: Importar Extrato OFX/CSV -->
+        <div class="mt-3.5">
+          <button onclick="abrirModalImportacao(${c.id})" class="w-full py-2 px-3 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-xl border border-indigo-200/60 dark:border-indigo-800/40 transition flex items-center justify-center gap-1.5 shadow-sm">
+            <i data-lucide="file-up" class="w-3.5 h-3.5"></i>
+            <span>Importar Extrato (OFX / CSV)</span>
+          </button>
         </div>
 
         <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
@@ -1642,324 +1522,9 @@ function editarConta(id) {
   document.getElementById('conta-cor').value = conta.cor || '#3b82f6';
   document.getElementById('conta-cor-label').textContent = conta.cor || '#3b82f6';
 
-  const bancoSelect = document.getElementById('conta-banco-id');
-  if (bancoSelect) {
-    bancoSelect.value = conta.banco_id || '';
-  }
-
   openModal('modal-conta');
 }
 
-// ========================================================
-// CONTROLE DO MODAL OPEN FINANCE
-// ========================================================
-let selectedOpenFinanceBank = null;
-let supportedBanksList = [];
-
-async function setupOpenFinanceModalHandlers() {
-  const btnLive = document.getElementById('btn-connect-pluggy-live');
-  const btnSandbox = document.getElementById('btn-confirm-sandbox-connect');
-  const btnDesconectar = document.getElementById('btn-desconectar-banco-modal');
-
-  // 1. CONEXÃO AO VIVO (BANCO REAL VIA PLUGGY)
-  btnLive?.addEventListener('click', async () => {
-    const contaId = document.getElementById('open-finance-target-conta-id')?.value;
-    if (!contaId) {
-      Swal.fire({ icon: 'warning', title: 'Atenção', text: 'Nenhuma conta bancária selecionada.' });
-      return;
-    }
-
-    Swal.fire({
-      title: 'Iniciando Open Finance...',
-      text: 'Comunicando com o Banco Central e autenticador Pluggy.ai...',
-      allowOutsideClick: false,
-      didOpen: () => { Swal.showLoading(); }
-    });
-
-    try {
-      const tokenRes = await fetch('/api/open-finance/connect-token');
-      const tokenData = await tokenRes.json();
-      Swal.close();
-
-      if (tokenData.success && tokenData.connectToken && typeof PluggyConnect !== 'undefined') {
-        closeModal('modal-open-finance');
-
-        const pluggyConnect = new PluggyConnect({
-          connectToken: tokenData.connectToken,
-          includeSandbox: true,
-          onSuccess: async (itemData) => {
-            try {
-              const itemId = itemData.item ? itemData.item.id : itemData.id;
-              const connectorName = itemData.item?.connector?.name || 'pluggy';
-
-              Swal.fire({
-                title: 'Vinculando Conta...',
-                text: 'Registrando conexão Open Finance segura.',
-                allowOutsideClick: false,
-                didOpen: () => { Swal.showLoading(); }
-              });
-
-              await fetch('/api/open-finance/save-connection', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  conta_id: parseInt(contaId),
-                  item_id: itemId,
-                  banco_id: connectorName.toLowerCase()
-                })
-              });
-
-              await loadAllData();
-              Swal.fire({
-                icon: 'success',
-                title: 'Banco Real Conectado!',
-                text: 'Sua conta bancária foi vinculada com sucesso via Open Finance Brasil! Agora você pode sincronizar seus extratos reais.',
-                confirmButtonColor: '#4f46e5'
-              });
-            } catch (saveErr) {
-              console.error('Erro ao salvar conexão:', saveErr);
-            }
-          },
-          onError: (error) => {
-            console.error('Pluggy Connect Error:', error);
-            Swal.fire({
-              icon: 'error',
-              title: 'Erro na Conexão Bancária',
-              text: error?.message || 'Não foi possível concluir a autenticação no banco.'
-            });
-          },
-          onClose: () => {
-            console.log('Pluggy Connect fechado pelo usuário.');
-          }
-        });
-
-        pluggyConnect.init();
-      } else {
-        // Busca diagnóstico em tempo real do servidor
-        let diagData = {};
-        try {
-          const diagRes = await fetch('/api/open-finance/diagnostico');
-          diagData = await diagRes.json();
-        } catch (dErr) {}
-
-        const varsList = diagData.variaveis_detectadas?.length 
-          ? diagData.variaveis_detectadas.map(v => `<span class="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-mono text-[10px] rounded">${v}</span>`).join(' ')
-          : '<span class="text-rose-500 font-semibold">Nenhuma variável detectada no deploy atual</span>';
-
-        Swal.fire({
-          icon: 'warning',
-          title: 'Configuração da Pluggy Necessária',
-          html: `
-            <div class="text-left space-y-3 text-xs text-slate-600 dark:text-slate-300">
-              <div class="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-xl space-y-1">
-                <p class="font-bold text-rose-600 dark:text-rose-400">Diagnóstico do Servidor:</p>
-                <p class="text-slate-700 dark:text-slate-300 leading-relaxed">${diagData.erro_detalhado || tokenData.error || 'Credenciais da Pluggy não encontradas ou inválidas.'}</p>
-                <p class="text-[11px] text-slate-500 mt-1">Variáveis no servidor: ${varsList}</p>
-              </div>
-
-              <div class="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl space-y-2 border border-slate-200 dark:border-slate-700">
-                <p class="font-bold text-slate-800 dark:text-white">Passo a Passo para Ativar na Vercel:</p>
-                <ol class="list-decimal list-inside space-y-1 text-slate-600 dark:text-slate-300">
-                  <li>No painel da <b>Vercel</b> ➔ acesse <b>Settings</b> ➔ <b>Environment Variables</b>.</li>
-                  <li>Adicione: <code>PLUGGY_CLIENT_ID</code> e <code>PLUGGY_CLIENT_SECRET</code> (ou <code>CLIENT_ID</code> e <code>CLIENT_SECRET</code>).</li>
-                  <li>Marque as 3 caixas: <b>Production</b>, <b>Preview</b> e <b>Development</b>.</li>
-                  <li>Vá na aba <b>Deployments</b> ➔ clique nos <b>...</b> do último deploy ➔ clique em <b>Redeploy</b>.</li>
-                </ol>
-              </div>
-            </div>
-          `,
-          confirmButtonText: 'Entendi, vou verificar',
-          confirmButtonColor: '#4f46e5'
-        });
-      }
-
-    } catch (err) {
-      Swal.close();
-      console.error('Erro ao chamar connect-token:', err);
-      Swal.fire({ icon: 'error', title: 'Erro', text: 'Falha na comunicação com o servidor.' });
-    }
-  });
-
-  // 2. CONEXÃO SANDBOX (SIMULADOR DE DEMONSTRAÇÃO)
-  btnSandbox?.addEventListener('click', async () => {
-    const contaId = document.getElementById('open-finance-target-conta-id')?.value;
-    if (!contaId) {
-      Swal.fire({ icon: 'warning', title: 'Atenção', text: 'Nenhuma conta selecionada.' });
-      return;
-    }
-
-    if (!selectedOpenFinanceBank) {
-      Swal.fire({ icon: 'warning', title: 'Selecione um Banco', text: 'Por favor, clique em um dos bancos da lista para simular o extrato.' });
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/open-finance/conectar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          conta_id: parseInt(contaId),
-          banco_id: selectedOpenFinanceBank.id,
-          tipo: 'open_finance_sandbox'
-        })
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        closeModal('modal-open-finance');
-        await loadAllData();
-        Swal.fire({
-          icon: 'success',
-          title: 'Modo Simulado Ativado!',
-          text: `A conta foi vinculada ao ${selectedOpenFinanceBank.nome} no modo Simulador/Sandbox. Ao clicar em Sincronizar, a IA gerará lançamentos fictícios de alta fidelidade para você testar.`,
-          confirmButtonColor: '#4f46e5'
-        });
-      } else {
-        Swal.fire({ icon: 'error', title: 'Erro na conexão', text: data.error });
-      }
-    } catch (err) {
-      console.error(err);
-      Swal.fire({ icon: 'error', title: 'Erro', text: 'Falha na comunicação com o servidor.' });
-    }
-  });
-
-  // 3. DESCONECTAR BANCO
-  btnDesconectar?.addEventListener('click', async () => {
-    const contaId = document.getElementById('open-finance-target-conta-id')?.value;
-    if (!contaId) return;
-
-    const result = await Swal.fire({
-      title: 'Desconectar Banco?',
-      text: 'A conta voltará ao modo manual. Nenhum lançamento já importado será apagado.',
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonColor: '#ef4444',
-      confirmButtonText: 'Sim, desconectar',
-      cancelButtonText: 'Cancelar'
-    });
-
-    if (result.isConfirmed) {
-      try {
-        const res = await fetch('/api/open-finance/desconectar', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ conta_id: parseInt(contaId) })
-        });
-        const data = await res.json();
-        if (data.success) {
-          closeModal('modal-open-finance');
-          await loadAllData();
-          Swal.fire({ icon: 'success', title: 'Desconectado', text: 'A integração bancária foi removida com sucesso.', timer: 1500, showConfirmButton: false });
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }
-  });
-}
-
-async function abrirModalOpenFinance(contaId) {
-  document.getElementById('open-finance-target-conta-id').value = contaId;
-  const container = document.getElementById('grid-bancos-open-finance');
-  const statusContainer = document.getElementById('open-finance-current-status');
-  const btnDesconectar = document.getElementById('btn-desconectar-banco-modal');
-  selectedOpenFinanceBank = null;
-
-  const conta = state.contas.find(c => c.id === contaId);
-  const isConectada = conta && conta.integracao_status === 'conectado';
-  const isLive = conta && (conta.integracao_tipo === 'pluggy_live' || Boolean(conta.integracao_item_id));
-
-  if (statusContainer) {
-    if (isConectada) {
-      statusContainer.innerHTML = `
-        <div class="flex items-center gap-2">
-          <div class="w-2.5 h-2.5 rounded-full ${isLive ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse"></div>
-          <div>
-            <p class="font-bold text-slate-800 dark:text-white">Status: ${isLive ? '🟢 Banco Real Conectado (Pluggy Live)' : '🟡 Modo Simulador (Sandbox)'}</p>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400">Instituição: <b>${conta.banco_id ? conta.banco_id.toUpperCase() : 'Bancária'}</b></p>
-          </div>
-        </div>
-      `;
-      btnDesconectar?.classList.remove('hidden');
-    } else {
-      statusContainer.innerHTML = `
-        <div class="flex items-center gap-2">
-          <div class="w-2.5 h-2.5 rounded-full bg-slate-400"></div>
-          <div>
-            <p class="font-bold text-slate-800 dark:text-white">Status: ⚪ Modo Manual (Sem Integração)</p>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400">Escolha uma das opções abaixo para sincronizar extratos</p>
-          </div>
-        </div>
-      `;
-      btnDesconectar?.classList.add('hidden');
-    }
-  }
-
-  if (container) {
-    container.innerHTML = `
-      <div class="col-span-full py-4 text-center text-xs text-slate-400">
-        <i data-lucide="refresh-cw" class="w-4 h-4 mx-auto animate-spin mb-1 text-indigo-500"></i>
-        <span>Carregando bancos...</span>
-      </div>
-    `;
-    lucide.createIcons();
-  }
-
-  openModal('modal-open-finance');
-
-  try {
-    if (supportedBanksList.length === 0) {
-      const res = await fetch('/api/open-finance/bancos');
-      const data = await res.json();
-      if (data.success) {
-        supportedBanksList = data.bancos;
-      }
-    }
-
-    const bancoAtualId = conta?.banco_id;
-
-    if (container) {
-      container.innerHTML = supportedBanksList.map(b => {
-        const isSelected = bancoAtualId === b.id;
-        if (isSelected) selectedOpenFinanceBank = b;
-
-        return `
-          <button type="button" onclick="selectOpenFinanceBank('${b.id}')" id="bank-card-${b.id}" class="bank-select-card p-2.5 rounded-xl border text-left transition flex items-center gap-2.5 ${isSelected ? 'border-indigo-600 ring-2 ring-indigo-500/20 bg-indigo-50/40 dark:bg-indigo-950/40' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 hover:border-slate-300 dark:hover:border-slate-600'}">
-            <div class="w-7 h-7 rounded-lg shrink-0 flex items-center justify-center text-white text-[10px] font-bold shadow-sm" style="background-color: ${b.cor};">
-              <i data-lucide="${b.icone || 'landmark'}" class="w-3.5 h-3.5"></i>
-            </div>
-            <div class="overflow-hidden">
-              <p class="text-xs font-bold text-slate-900 dark:text-white truncate">${b.nome}</p>
-              <p class="text-[10px] text-slate-400 truncate">Cód. ${b.codigo}</p>
-            </div>
-          </button>
-        `;
-      }).join('');
-      lucide.createIcons();
-    }
-  } catch (err) {
-    console.error('Erro ao buscar bancos:', err);
-  }
-}
-
-function selectOpenFinanceBank(bankId) {
-  const bank = supportedBanksList.find(b => b.id === bankId);
-  if (!bank) return;
-
-  selectedOpenFinanceBank = bank;
-
-  // Atualiza classes visuais dos cards
-  document.querySelectorAll('.bank-select-card').forEach(card => {
-    card.classList.remove('border-indigo-600', 'ring-2', 'ring-indigo-500/20', 'bg-indigo-50/40', 'dark:bg-indigo-950/40');
-    card.classList.add('border-slate-200', 'dark:border-slate-700', 'bg-white', 'dark:bg-slate-800/80');
-  });
-
-  const activeCard = document.getElementById(`bank-card-${bankId}`);
-  if (activeCard) {
-    activeCard.classList.remove('border-slate-200', 'dark:border-slate-700', 'bg-white', 'dark:bg-slate-800/80');
-    activeCard.classList.add('border-indigo-600', 'ring-2', 'ring-indigo-500/20', 'bg-indigo-50/40', 'dark:bg-indigo-950/40');
-  }
-}
 
 
 async function excluirConta(id) {
