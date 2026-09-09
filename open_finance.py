@@ -350,13 +350,30 @@ import urllib.error
 
 PLUGGY_BASE_URL = "https://api.pluggy.ai"
 
+def get_pluggy_credentials():
+    """Recupera Client ID e Client Secret aceitando variações de nomes e limpando aspas."""
+    client_id = (
+        os.environ.get("PLUGGY_CLIENT_ID") or 
+        os.environ.get("CLIENT_ID") or 
+        os.environ.get("PLUGGY_ID") or 
+        ""
+    ).strip().strip('"').strip("'")
+    
+    client_secret = (
+        os.environ.get("PLUGGY_CLIENT_SECRET") or 
+        os.environ.get("CLIENT_SECRET") or 
+        os.environ.get("PLUGGY_SECRET") or 
+        ""
+    ).strip().strip('"').strip("'")
+    
+    return client_id, client_secret
+
 def get_pluggy_api_key():
     """Obtém o token de autenticação (API Key) da Pluggy usando Client ID e Secret."""
-    client_id = os.environ.get("PLUGGY_CLIENT_ID", "").strip()
-    client_secret = os.environ.get("PLUGGY_CLIENT_SECRET", "").strip()
+    client_id, client_secret = get_pluggy_credentials()
 
     if not client_id or not client_secret:
-        return None
+        return None, "Variáveis de ambiente (PLUGGY_CLIENT_ID e PLUGGY_CLIENT_SECRET) não foram encontradas no servidor Vercel. É necessário fazer um Redeploy após adicioná-las."
 
     try:
         url = f"{PLUGGY_BASE_URL}/auth"
@@ -365,29 +382,39 @@ def get_pluggy_api_key():
         
         with urllib.request.urlopen(req, timeout=10) as response:
             data = json.loads(response.read().decode("utf-8"))
-            return data.get("apiKey")
+            api_key = data.get("apiKey")
+            if api_key:
+                return api_key, None
+            return None, "A Pluggy respondeu com sucesso, mas não retornou a chave apiKey."
+    except urllib.error.HTTPError as he:
+        try:
+            err_body = he.read().decode("utf-8", errors="ignore")
+            err_json = json.loads(err_body)
+            msg = err_json.get("message") or err_body
+        except Exception:
+            msg = str(he)
+        return None, f"Pluggy Auth HTTP {he.code}: {msg}"
     except Exception as e:
         print(f"[OpenFinance] Erro ao autenticar no Pluggy: {e}")
-        return None
+        return None, f"Erro de conexão com Pluggy.ai: {str(e)}"
 
 def create_pluggy_connect_token(item_id=None, client_user_id=None):
     """Gera um token efêmero de conexão para o Pluggy Connect Widget no frontend."""
-    client_id = os.environ.get("PLUGGY_CLIENT_ID", "").strip()
-    client_secret = os.environ.get("PLUGGY_CLIENT_SECRET", "").strip()
+    client_id, client_secret = get_pluggy_credentials()
 
     if not client_id or not client_secret:
         return {
             "success": False,
             "mode": "sandbox",
-            "error": "Variáveis PLUGGY_CLIENT_ID ou PLUGGY_CLIENT_SECRET não encontradas no servidor. Se você acabou de cadastrá-las na Vercel, é necessário fazer um Redeploy para ativá-las."
+            "error": "Variáveis PLUGGY_CLIENT_ID ou PLUGGY_CLIENT_SECRET não encontradas no servidor. Se você acabou de cadastrá-las na Vercel, acesse Deployments ➔ clique nos '...' ➔ Redeploy para ativá-las."
         }
 
-    api_key = get_pluggy_api_key()
+    api_key, err_msg = get_pluggy_api_key()
     if not api_key:
         return {
             "success": False,
             "mode": "sandbox",
-            "error": "Não foi possível autenticar na Pluggy. Verifique se o Client ID e Client Secret estão corretos no painel da Pluggy.ai."
+            "error": err_msg or "Falha de autenticação na Pluggy. Verifique o Client ID e Secret."
         }
 
     try:
@@ -414,15 +441,24 @@ def create_pluggy_connect_token(item_id=None, client_user_id=None):
                 "connectToken": access_token,
                 "accessToken": access_token
             }
+    except urllib.error.HTTPError as he:
+        try:
+            err_body = he.read().decode("utf-8", errors="ignore")
+            err_json = json.loads(err_body)
+            msg = err_json.get("message") or err_body
+        except Exception:
+            msg = str(he)
+        return {"success": False, "mode": "sandbox", "error": f"Pluggy ConnectToken HTTP {he.code}: {msg}"}
     except Exception as e:
         print(f"[OpenFinance] Erro ao gerar connectToken no Pluggy: {e}")
         return {"success": False, "mode": "sandbox", "error": f"Erro ao comunicar com Pluggy.ai: {str(e)}"}
 
 
 
+
 def fetch_pluggy_accounts(item_id):
     """Consulta as contas associadas a uma conexão Pluggy (Item)."""
-    api_key = get_pluggy_api_key()
+    api_key, _ = get_pluggy_api_key()
     if not api_key or not item_id:
         return []
 
@@ -442,9 +478,10 @@ def fetch_pluggy_accounts(item_id):
 
 def fetch_pluggy_live_transactions(account_id, dias=30):
     """Consulta as transações reais de uma conta conectada ao Pluggy."""
-    api_key = get_pluggy_api_key()
+    api_key, _ = get_pluggy_api_key()
     if not api_key or not account_id:
         return []
+
 
     hoje = date.today()
     data_inicio = (hoje - timedelta(days=dias)).strftime("%Y-%m-%d")
