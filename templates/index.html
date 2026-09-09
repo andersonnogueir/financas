@@ -623,6 +623,8 @@
   <!-- ============================================== -->
   <!-- MODAL PRINCIPAL: IMPORTAÇÃO BANCÁRIA INTELIGENTE (OFX, CSV, TXT) -->
   <!-- ============================================== -->
+  <!-- MODAL: IMPORTAÇÃO DE EXTRATO & OPEN FINANCE -->
+  <!-- ============================================== -->
   <div id="modal-import" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 modal-backdrop hidden">
     <div class="bg-white dark:bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col transform transition-all">
       
@@ -630,14 +632,14 @@
       <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/30">
-            <i data-lucide="file-up" class="w-5 h-5"></i>
+            <i data-lucide="refresh-cw" class="w-5 h-5"></i>
           </div>
           <div>
             <h3 id="modal-import-titulo" class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              Importação Inteligente de Extrato Bancário
-              <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold uppercase tracking-wider">OFX / CSV / TXT</span>
+              Sincronização & Importação de Extrato
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold uppercase tracking-wider">Open Finance & IA</span>
             </h3>
-            <p id="modal-import-subtitulo" class="text-xs text-slate-500 dark:text-slate-400">Envie o arquivo exportado do seu banco para pré-visualizar e categorizar com IA</p>
+            <p id="modal-import-subtitulo" class="text-xs text-slate-500 dark:text-slate-400">Consulte diretamente pela API do seu banco ou envie arquivos de extrato</p>
           </div>
         </div>
 
@@ -646,9 +648,71 @@
         </button>
       </div>
 
-      <!-- ETAPA 1: UPLOAD DO ARQUIVO -->
+      <!-- ETAPA 1: ESCOLHA DO MÉTODO (SINCRONIZAÇÃO DIRETA API VS UPLOAD MANUAL) -->
       <div id="import-etapa-1" class="p-6 space-y-5 overflow-y-auto">
-        <div class="space-y-4">
+        
+        <!-- Abas Seletoras de Método -->
+        <div class="grid grid-cols-2 gap-2 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700">
+          <button id="tab-import-api" type="button" class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-md shadow-indigo-600/30">
+            <i data-lucide="zap" class="w-4 h-4"></i>
+            <span>Sincronização Direta (API / Open Finance)</span>
+          </button>
+          <button id="tab-import-file" type="button" class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200">
+            <i data-lucide="file-up" class="w-4 h-4"></i>
+            <span>Upload de Arquivo (OFX / CSV)</span>
+          </button>
+        </div>
+
+        <!-- CONTEÚDO MÉTODO 1: SINCRONIZAÇÃO DIRETA VIA API -->
+        <div id="import-pane-api" class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">1. Selecione a Conta Bancária Integrada *</label>
+            <select id="import-api-conta-id" class="w-full px-3.5 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+              <!-- Preenchido dinamicamente -->
+            </select>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">2. Período de Consulta</label>
+              <select id="import-api-dias" class="w-full px-3.5 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+                <option value="7">Últimos 7 dias</option>
+                <option value="15">Últimos 15 dias</option>
+                <option value="30" selected>Últimos 30 dias (Recomendado)</option>
+                <option value="60">Últimos 60 dias</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Segurança & Conexão</label>
+              <div class="px-3.5 py-2.5 text-xs rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                <i data-lucide="shield-check" class="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400"></i>
+                <span class="truncate">Modo Consulta Somente Leitura</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card Informativo de Bancos Suportados -->
+          <div class="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-indigo-600/10 dark:bg-indigo-600/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                <i data-lucide="landmark" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-indigo-950 dark:text-indigo-200">Bancos Homologados via Open Finance</p>
+                <p class="text-[11px] text-indigo-700 dark:text-indigo-300">Nubank, Inter, Bradesco, Banco do Brasil, Itaú, Santander, Caixa, C6 e Cooperativas.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Botão Disparar Sincronização -->
+          <button id="btn-import-sync-api" type="button" class="w-full py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 shadow-lg shadow-indigo-600/30 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2.5">
+            <i data-lucide="zap" class="w-4 h-4"></i>
+            <span>Sincronizar Extrato via API Bancária Agora</span>
+          </button>
+        </div>
+
+        <!-- CONTEÚDO MÉTODO 2: UPLOAD DE ARQUIVO (OFX/CSV/TXT) -->
+        <div id="import-pane-file" class="space-y-4 hidden">
           <!-- Seleção de Conta -->
           <div>
             <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">1. Selecione a Conta Bancária de Destino *</label>
@@ -690,6 +754,7 @@
             </button>
           </div>
         </div>
+
       </div>
 
       <!-- ETAPA 2: CONFERÊNCIA & EDIÇÃO INTERATIVA COM SUGESTÃO IA -->
@@ -698,7 +763,10 @@
         <!-- Barra de Resumo e Filtros da Prévia -->
         <div class="p-4 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
           <div class="flex flex-wrap items-center gap-3">
-            <span class="font-bold text-slate-900 dark:text-white" id="import-preview-stats">0 transações</span>
+            <span class="inline-flex items-center gap-1.5 font-bold text-slate-900 dark:text-white" id="import-preview-stats">
+              <i data-lucide="sparkles" class="w-4 h-4 text-indigo-500"></i>
+              <span>0 transações</span>
+            </span>
             <span class="text-emerald-500 font-semibold" id="import-preview-rec">+R$ 0,00</span>
             <span class="text-rose-500 font-semibold" id="import-preview-desp">-R$ 0,00</span>
           </div>
@@ -736,7 +804,7 @@
         <div class="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-3">
           <button id="btn-import-voltar" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition flex items-center gap-1.5">
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
-            <span>Voltar / Escolher outro arquivo</span>
+            <span>Voltar</span>
           </button>
 
           <button id="btn-import-confirmar-final" class="px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2">
@@ -780,55 +848,66 @@
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Descrição *</label>
-            <input type="text" id="lancamento-descricao" required placeholder="Ex: Supermercado, Aluguel..." class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
-          </div>
-          <div>
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Valor (R$) *</label>
             <div class="relative">
-              <span class="absolute left-3 top-2 text-sm font-bold text-slate-400">R$</span>
-              <input type="number" step="0.01" min="0.01" id="lancamento-valor" required placeholder="0,00" class="w-full pl-10 pr-3 py-2 text-sm font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+              <span class="absolute left-3 top-2 text-xs font-bold text-slate-400">R$</span>
+              <input type="number" step="0.01" id="lancamento-valor" required placeholder="0,00" class="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white font-bold">
             </div>
           </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Data *</label>
             <input type="date" id="lancamento-data" required class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
           </div>
-          <div id="container-campo-status">
-            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Status da Movimentação</label>
-            <select id="lancamento-status" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
-              <option value="pago">Pago / Realizado (Debita/Credita do Saldo)</option>
-              <option value="pendente">Pendente / A Vencer (Agendado)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label id="lbl-conta-origem" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Conta Bancária *</label>
-            <select id="lancamento-conta" required class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
-            </select>
-          </div>
-
-          <div id="container-conta-destino" class="hidden">
-            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Conta de Destino *</label>
-            <select id="lancamento-conta-destino" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
-            </select>
-          </div>
-
-          <div id="container-categoria">
-            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Categoria</label>
-            <select id="lancamento-categoria" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
-            </select>
-          </div>
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Observações (opcional)</label>
-          <input type="text" id="lancamento-observacoes" placeholder="Ex: Pago no débito, comprovante no e-mail..." class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Descrição / Estabelecimento *</label>
+          <input type="text" id="lancamento-descricao" required placeholder="Ex: Supermercado, Aluguel, PIX..." class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="row-lancamento-selects">
+          <div id="col-lancamento-conta">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Conta Bancária / Carteira *</label>
+            <select id="lancamento-conta-id" required class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+              <!-- Preenchido via JS -->
+            </select>
+          </div>
+          <div id="col-lancamento-categoria">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Categoria *</label>
+            <select id="lancamento-categoria-id" required class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+              <!-- Preenchido via JS -->
+            </select>
+          </div>
+        </div>
+
+        <!-- Campos especiais de Transferência (Origem vs Destino) -->
+        <div id="row-lancamento-transferencia" class="hidden grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Conta Origem (Sai)</label>
+            <select id="transf-conta-origem" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+              <!-- Preenchido via JS -->
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Conta Destino (Entra)</label>
+            <select id="transf-conta-destino" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+              <!-- Preenchido via JS -->
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Status do Pagamento</label>
+            <select id="lancamento-status" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+              <option value="pago">Liquidado / Pago</option>
+              <option value="pendente">Pendente / Agendado</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Observações (Opcional)</label>
+            <input type="text" id="lancamento-obs" placeholder="Ex: Parcela 1/3" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+          </div>
         </div>
 
         <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
@@ -863,8 +942,20 @@
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Instituição / Banco</label>
-            <input type="text" id="conta-instituicao" placeholder="Ex: Nubank, Itaú..." class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Banco / Open Finance</label>
+            <select id="conta-banco-id" class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
+              <option value="">Nenhum (Manual / Outro)</option>
+              <option value="nubank">🟣 Nubank</option>
+              <option value="inter">🟠 Banco Inter</option>
+              <option value="bradesco">🔴 Banco Bradesco</option>
+              <option value="bb">🟡 Banco do Brasil</option>
+              <option value="itau">🟧 Itaú Unibanco</option>
+              <option value="santander">🔴 Santander</option>
+              <option value="caixa">🔵 Caixa Econômica</option>
+              <option value="c6">⚫ C6 Bank</option>
+              <option value="sicoob">🟢 Sicoob</option>
+              <option value="btg">🔵 BTG Pactual</option>
+            </select>
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Tipo de Conta</label>
@@ -876,6 +967,11 @@
               <option value="Outros">Outros</option>
             </select>
           </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Instituição (Exibição)</label>
+          <input type="text" id="conta-instituicao" placeholder="Ex: Nubank, Itaú..." class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white">
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -901,6 +997,57 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: CONECTAR BANCO VIA OPEN FINANCE -->
+  <div id="modal-open-finance" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-emerald-500 flex items-center justify-center text-white shadow-md">
+            <i data-lucide="shield-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">Conectar Banco via Open Finance</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Consulta de extrato direta, automática e segura (Somente Leitura)</p>
+          </div>
+        </div>
+        <button class="btn-close-modal text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4 overflow-y-auto">
+        <input type="hidden" id="open-finance-target-conta-id" value="">
+        
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">Selecione seu Banco ou Instituição Financeira *</label>
+          <div id="grid-bancos-open-finance" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            <!-- Injetado dinamicamente -->
+          </div>
+        </div>
+
+        <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2 text-xs">
+          <div class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold">
+            <i data-lucide="lock" class="w-4 h-4"></i>
+            <span>Segurança Certificada & Modo Somente Leitura</span>
+          </div>
+          <p class="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
+            O FinFlow utiliza a infraestrutura do Open Finance Brasil (Resolução Banco Central) com permissão estrita de consulta de extrato. O sistema não tem acesso para realizar transações, pagamentos ou transferências.
+          </p>
+        </div>
+      </div>
+
+      <div class="p-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2 bg-white dark:bg-slate-900">
+        <button type="button" class="btn-close-modal px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">
+          Cancelar
+        </button>
+        <button id="btn-confirm-open-finance-connect" type="button" class="px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Autorizar e Conectar Banco</span>
+        </button>
+      </div>
     </div>
   </div>
 

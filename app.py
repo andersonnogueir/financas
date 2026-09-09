@@ -11,6 +11,7 @@ from flask import Flask, render_template, request, jsonify, Response, redirect, 
 from werkzeug.security import check_password_hash
 import database
 import bank_parser
+import open_finance
 
 import jinja2
 
@@ -419,6 +420,7 @@ def auth_me():
 # ==========================================
 
 @app.route("/api/dashboard", methods=["GET"])
+@app.route("/api/dashboard/resumo", methods=["GET"])
 @login_required
 def get_dashboard():
     user_id = session['user_id']
@@ -585,13 +587,22 @@ def create_conta():
     saldo_inicial = float(data.get("saldo_inicial", 0.0))
     cor = data.get("cor", "#3b82f6")
     icone = data.get("icone", "wallet")
+    
+    banco_id = data.get("banco_id")
+    if not banco_id and data.get("conectar_open_finance"):
+        banco_id = open_finance.detect_bank_from_name(nome, instituicao)
+        
+    integracao_tipo = data.get("integracao_tipo", "open_finance_sandbox" if banco_id else "manual")
+    integracao_status = data.get("integracao_status", "conectado" if banco_id else "desconectado")
+    integracao_agencia = data.get("integracao_agencia", "")
+    integracao_conta = data.get("integracao_conta", "")
 
     conn = database.get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO contas (user_id, nome, instituicao, tipo, saldo_inicial, cor, icone)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (user_id, nome, instituicao, tipo, saldo_inicial, cor, icone))
+        INSERT INTO contas (user_id, nome, instituicao, tipo, saldo_inicial, cor, icone, banco_id, integracao_tipo, integracao_status, integracao_agencia, integracao_conta)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, nome, instituicao, tipo, saldo_inicial, cor, icone, banco_id, integracao_tipo, integracao_status, integracao_agencia, integracao_conta))
     conn.commit()
     novo_id = cursor.lastrowid
     conn.close()
@@ -613,13 +624,32 @@ def update_conta(conta_id):
     cor = data.get("cor", "#3b82f6")
     icone = data.get("icone", "wallet")
 
+    banco_id = data.get("banco_id")
+    integracao_tipo = data.get("integracao_tipo")
+    integracao_status = data.get("integracao_status")
+    integracao_agencia = data.get("integracao_agencia")
+    integracao_conta = data.get("integracao_conta")
+
     conn = database.get_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        UPDATE contas 
-        SET nome = ?, instituicao = ?, tipo = ?, saldo_inicial = ?, cor = ?, icone = ?
-        WHERE id = ? AND user_id = ?
-    """, (nome, instituicao, tipo, saldo_inicial, cor, icone, conta_id, user_id))
+
+    if banco_id is not None:
+        cursor.execute("""
+            UPDATE contas 
+            SET nome = ?, instituicao = ?, tipo = ?, saldo_inicial = ?, cor = ?, icone = ?,
+                banco_id = ?, integracao_tipo = COALESCE(?, integracao_tipo), 
+                integracao_status = COALESCE(?, integracao_status),
+                integracao_agencia = COALESCE(?, integracao_agencia),
+                integracao_conta = COALESCE(?, integracao_conta)
+            WHERE id = ? AND user_id = ?
+        """, (nome, instituicao, tipo, saldo_inicial, cor, icone, banco_id, integracao_tipo, integracao_status, integracao_agencia, integracao_conta, conta_id, user_id))
+    else:
+        cursor.execute("""
+            UPDATE contas 
+            SET nome = ?, instituicao = ?, tipo = ?, saldo_inicial = ?, cor = ?, icone = ?
+            WHERE id = ? AND user_id = ?
+        """, (nome, instituicao, tipo, saldo_inicial, cor, icone, conta_id, user_id))
+
     conn.commit()
     conn.close()
 
@@ -636,6 +666,173 @@ def delete_conta(conta_id):
     conn.close()
 
     return jsonify({"success": True, "message": "Conta desativada com sucesso"})
+
+# ==========================================
+# ROTAS OPEN FINANCE / INTEGRAÇÃO DE BANCOS
+# ==========================================
+
+@app.route("/api/open-finance/bancos", methods=["GET"])
+@login_required
+def list_open_finance_bancos():
+    """Retorna o catálogo de bancos brasileiros suportados e seus metadados."""
+    bancos = open_finance.get_supported_banks()
+    return jsonify({
+        "success": True,
+        "total": len(bancos),
+        "bancos": bancos
+    })
+
+@app.route("/api/open-finance/conectar", methods=["POST"])
+@login_required
+def conectar_banco():
+    """Conecta uma conta cadastrada com a API bancária via Open Finance."""
+    user_id = session['user_id']
+    data = request.get_json() or {}
+    conta_id = data.get("conta_id")
+    banco_id = data.get("banco_id")
+    agencia = data.get("agencia", "")
+    conta = data.get("conta", "")
+    tipo = data.get("tipo", "open_finance_sandbox")
+
+    if not conta_id or not banco_id:
+        return jsonify({"error": "ID da conta e código do banco são obrigatórios"}), 400
+
+    conta_db = database.get_conta_by_id(int(conta_id), user_id)
+    if not conta_db:
+        return jsonify({"error": "Conta bancária não encontrada"}), 404
+
+    banco_info = open_finance.get_bank_by_id(banco_id)
+    if not banco_info:
+        return jsonify({"error": "Instituição bancária não suportada"}), 400
+
+    database.conectar_conta_banco(int(conta_id), user_id, banco_id, tipo, agencia, conta)
+
+    return jsonify({
+        "success": True,
+        "message": f"Conta vinculada com sucesso ao {banco_info['nome']} via Open Finance (Modo Somente Leitura)!",
+        "banco": banco_info
+    })
+
+@app.route("/api/open-finance/desconectar", methods=["POST"])
+@login_required
+def desconectar_banco():
+    """Desvincula a integração Open Finance da conta."""
+    user_id = session['user_id']
+    data = request.get_json() or {}
+    conta_id = data.get("conta_id")
+
+    if not conta_id:
+        return jsonify({"error": "ID da conta é obrigatório"}), 400
+
+    database.desconectar_conta_banco(int(conta_id), user_id)
+    return jsonify({"success": True, "message": "Integração Open Finance desativada com sucesso."})
+
+@app.route("/api/open-finance/sync/<int:conta_id>", methods=["POST", "GET"])
+@app.route("/api/import/sync-bank", methods=["POST"])
+@login_required
+def sync_bank_account(conta_id=None):
+    """
+    Consulta o extrato bancário via API/Open Finance e envia as transações
+    diretamente para o fluxo inteligente de pré-visualização e categorização com IA.
+    """
+    user_id = session['user_id']
+    if conta_id is None:
+        data = request.get_json() or {}
+        conta_id = data.get("conta_id") or request.form.get("conta_id")
+
+    if not conta_id:
+        return jsonify({"error": "ID da conta bancária de destino é obrigatório"}), 400
+
+    conta = database.get_conta_by_id(int(conta_id), user_id)
+    if not conta:
+        return jsonify({"error": "Conta bancária não encontrada"}), 404
+
+    dias = 30
+    if request.method == "GET":
+        dias = int(request.args.get("dias", 30))
+    else:
+        req_data = request.get_json() or {}
+        dias = int(req_data.get("dias", 30))
+
+    # Consulta o extrato via Open Finance
+    transacoes_raw = open_finance.fetch_bank_transactions(conta, dias=dias)
+
+    if not transacoes_raw:
+        return jsonify({"error": "Nenhuma transação retornada pela API bancária para esta conta."}), 400
+
+    conn = database.get_connection()
+    cursor = conn.cursor()
+
+    transacoes_processadas = []
+    total_despesas = 0.0
+    total_receitas = 0.0
+
+    for idx, t in enumerate(transacoes_raw):
+        # Auto-sugestão de categoria com o motor inteligente
+        sugestao = database.sugerir_categoria(user_id, t['descricao'], t['tipo'], conn)
+
+        cat_id = sugestao['categoria_id'] if sugestao else None
+        cat_nome = sugestao['categoria_nome'] if sugestao else 'Sem Categoria'
+        origem = sugestao['origem'] if sugestao else 'padrao'
+
+        # Verificar se já existe transação idêntica no mesmo banco (duplicidade)
+        is_duplicada = False
+        if t.get('fitid'):
+            cursor.execute("SELECT COUNT(*) FROM transacoes WHERE user_id = ? AND fitid = ?", (user_id, t['fitid']))
+            is_duplicada = cursor.fetchone()[0] > 0
+        else:
+            cursor.execute("""
+                SELECT COUNT(*) FROM transacoes 
+                WHERE user_id = ? AND data = ? AND valor = ? AND tipo = ? AND lower(descricao) = lower(?)
+            """, (user_id, t['data'], t['valor'], t['tipo'], t['descricao'].strip()))
+            is_duplicada = cursor.fetchone()[0] > 0
+
+        if t['tipo'] == 'despesa':
+            total_despesas += t['valor']
+        else:
+            total_receitas += t['valor']
+
+        # Extrair termo de busca recomendado para memorização de regra
+        palavras = [p for p in re.findall(r'[a-zA-Z\u00C0-\u00FF]{3,}', t['descricao']) if p.lower() not in ['para', 'pago', 'compra', 'cartao', 'debito', 'credito', 'transferencia', 'banco', 'transf', 'auto', 'extrato', 'api']]
+        termo_sugerido = " ".join(palavras[:2]).upper() if palavras else t['descricao'][:15].upper()
+
+        transacoes_processadas.append({
+            "temp_id": idx + 1,
+            "data": t['data'],
+            "descricao": t['descricao'],
+            "descricao_original": t.get('descricao_original', t['descricao']),
+            "valor": t['valor'],
+            "tipo": t['tipo'],
+            "categoria_id": cat_id,
+            "categoria_nome": cat_nome,
+            "origem_sugestao": origem,
+            "termo_regra_sugerido": termo_sugerido,
+            "is_duplicada": is_duplicada,
+            "fitid": t.get('fitid', ''),
+            "selecionada": not is_duplicada
+        })
+
+    conn.close()
+
+    # Atualizar data do último sync
+    ultimo_sync_ts = database.atualizar_ultimo_sync(int(conta_id), user_id)
+    banco_id_detectado = conta.get('banco_id') or open_finance.detect_bank_from_name(conta.get('nome', ''), conta.get('instituicao', ''))
+    banco_info = open_finance.get_bank_by_id(banco_id_detectado)
+
+    return jsonify({
+        "success": True,
+        "origem": "api_banco",
+        "banco": banco_info,
+        "conta_id": int(conta_id),
+        "conta_nome": conta['nome'],
+        "ultimo_sync": ultimo_sync_ts,
+        "total_transacoes": len(transacoes_processadas),
+        "total_despesas": round(total_despesas, 2),
+        "total_receitas": round(total_receitas, 2),
+        "transacoes": transacoes_processadas,
+        "mensagem": f"{len(transacoes_processadas)} transações consultadas via API bancária com sucesso!"
+    })
+
 
 # ==========================================
 # API TRANSFERÊNCIAS (PROTEGIDA)

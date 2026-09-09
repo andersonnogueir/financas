@@ -17,6 +17,12 @@ export interface Account {
   despesas_pagas?: number;
   cor: string;
   icone: string;
+  banco_id?: string;
+  integracao_tipo?: string;
+  integracao_status?: 'conectado' | 'desconectado' | 'sincronizando' | string;
+  integracao_agencia?: string;
+  integracao_conta?: string;
+  ultimo_sync?: string;
   ativo: number;
 }
 

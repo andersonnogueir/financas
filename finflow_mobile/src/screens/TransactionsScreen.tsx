@@ -15,9 +15,11 @@ import { api } from '../services/api';
 import { Transaction } from '../types';
 import { Search, Filter, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Trash2, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const TransactionsScreen = ({ navigation }: any) => {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [mes, setMes] = useState(8);
   const [ano, setAno] = useState(2026);
@@ -159,7 +161,16 @@ export const TransactionsScreen = ({ navigation }: any) => {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: colors.surface,
+            borderBottomColor: colors.border,
+            paddingTop: Math.max(insets.top, 16) + 10,
+          },
+        ]}
+      >
         <Text style={[styles.headerTitle, { color: colors.text }]}>Lançamentos & Extrato</Text>
 
         {/* Seletor de Mês Compacto */}
@@ -233,7 +244,7 @@ export const TransactionsScreen = ({ navigation }: any) => {
           data={transacoes}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderItem}
-          contentContainerStyle={styles.listContainer}
+          contentContainerStyle={[styles.listContainer, { paddingBottom: 110 + insets.bottom }]}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
           ListEmptyComponent={
@@ -255,7 +266,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingTop: 50,
     paddingBottom: 16,
     paddingHorizontal: 20,
     flexDirection: 'row',

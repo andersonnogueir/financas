@@ -24,10 +24,12 @@ import {
   CheckCircle2,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const DashboardScreen = ({ navigation }: any) => {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [mes, setMes] = useState(8);
   const [ano, setAno] = useState(2026);
@@ -94,7 +96,16 @@ export const DashboardScreen = ({ navigation }: any) => {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header com Saudação e Seletor de Mês */}
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: colors.surface,
+            borderBottomColor: colors.border,
+            paddingTop: Math.max(insets.top, 16) + 10,
+          },
+        ]}
+      >
         <View>
           <Text style={[styles.greetingSub, { color: colors.textMuted }]}>Olá,</Text>
           <Text style={[styles.greetingName, { color: colors.text }]}>{user?.nome || 'Usuário'}</Text>
@@ -115,7 +126,7 @@ export const DashboardScreen = ({ navigation }: any) => {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollBody}
+        contentContainerStyle={[styles.scrollBody, { paddingBottom: 110 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
@@ -286,7 +297,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   header: {
-    paddingTop: 50,
     paddingBottom: 16,
     paddingHorizontal: 20,
     flexDirection: 'row',

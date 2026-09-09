@@ -12,14 +12,18 @@ import { useTheme } from '../context/ThemeContext';
 import { api } from '../services/api';
 import { Account } from '../types';
 import * as DocumentPicker from 'expo-document-picker';
-import { FileUp, Sparkles, Check, AlertCircle } from 'lucide-react-native';
+import { FileUp, Sparkles, Check, AlertCircle, UploadCloud, CheckCircle2, FileText, ArrowRight, Zap, ShieldCheck } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const ImportScreen = () => {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
+  const [activeTab, setActiveTab] = useState<'api' | 'file'>('api');
   const [contas, setContas] = useState<Account[]>([]);
   const [selectedContaId, setSelectedContaId] = useState<number | null>(null);
+  const [selectedDays, setSelectedDays] = useState<number>(30);
   const [loading, setLoading] = useState(false);
   const [previewData, setPreviewData] = useState<any | null>(null);
   const [selectedItems, setSelectedItems] = useState<number[]>([]);
@@ -37,6 +41,31 @@ export const ImportScreen = () => {
       }
     } catch (e) {
       console.warn('Erro ao carregar contas para importação:', e);
+    }
+  };
+
+  const handleSyncApi = async () => {
+    if (!selectedContaId) {
+      Alert.alert('Atenção', 'Selecione uma conta bancária primeiro.');
+      return;
+    }
+
+    setLoading(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    try {
+      const res = await api.get(`/api/open-finance/sync/${selectedContaId}?dias=${selectedDays}`);
+      if (res.data && res.data.success) {
+        setPreviewData(res.data);
+        setSelectedItems(res.data.transacoes.map((_: any, idx: number) => idx));
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Alert.alert('Aviso', res.data?.error || 'Erro ao sincronizar extrato bancário.');
+      }
+    } catch (e: any) {
+      Alert.alert('Erro', e.response?.data?.error || 'Não foi possível consultar a API bancária.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -66,7 +95,7 @@ export const ImportScreen = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     const formData = new FormData();
-    formData.append('file', {
+    formData.append('arquivo', {
       uri: file.uri,
       name: file.name,
       type: file.mimeType || 'application/octet-stream',
@@ -80,7 +109,6 @@ export const ImportScreen = () => {
 
       if (res.data && res.data.success) {
         setPreviewData(res.data);
-        // Selecionar todos por padrão
         setSelectedItems(res.data.transacoes.map((_: any, idx: number) => idx));
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
@@ -111,7 +139,7 @@ export const ImportScreen = () => {
 
       if (res.data?.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert('Sucesso!', `${res.data.importadas} transações importadas com IA!`, [
+        Alert.alert('Sucesso!', `${res.data.salvas} transações importadas e categorizadas com IA!`, [
           {
             text: 'OK',
             onPress: () => {
@@ -137,14 +165,63 @@ export const ImportScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Importar Extrato com IA</Text>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: colors.surface,
+            borderBottomColor: colors.border,
+            paddingTop: Math.max(insets.top, 16) + 10,
+          },
+        ]}
+      >
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Extrato Inteligente & Open Finance</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 110 + insets.bottom }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Abas: Sincronização Direta API vs Upload de Arquivo */}
+        {!previewData && (
+          <View style={[styles.tabsRow, { backgroundColor: colors.surfaceSubtle, borderColor: colors.border }]}>
+            <TouchableOpacity
+              style={[
+                styles.tabBtn,
+                activeTab === 'api' && { backgroundColor: colors.primary },
+              ]}
+              onPress={() => {
+                setActiveTab('api');
+                Haptics.selectionAsync();
+              }}
+            >
+              <Zap size={14} color={activeTab === 'api' ? '#fff' : colors.textMuted} />
+              <Text style={[styles.tabBtnText, { color: activeTab === 'api' ? '#fff' : colors.textMuted }]}>
+                Sincronizar API
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.tabBtn,
+                activeTab === 'file' && { backgroundColor: colors.primary },
+              ]}
+              onPress={() => {
+                setActiveTab('file');
+                Haptics.selectionAsync();
+              }}
+            >
+              <FileUp size={14} color={activeTab === 'file' ? '#fff' : colors.textMuted} />
+              <Text style={[styles.tabBtnText, { color: activeTab === 'file' ? '#fff' : colors.textMuted }]}>
+                Upload OFX/CSV
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Seleção de Conta Destino */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.label, { color: colors.textMuted }]}>1. Conta de Destino</Text>
+          <Text style={[styles.label, { color: colors.textMuted }]}>1. Conta Bancária *</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.accountsRow}>
             {contas.map((c) => (
               <TouchableOpacity
@@ -162,15 +239,66 @@ export const ImportScreen = () => {
                 }}
               >
                 <Text style={[styles.accountPillText, { color: selectedContaId === c.id ? '#fff' : colors.text }]}>
-                  {c.nome}
+                  {c.integracao_status === 'conectado' ? '⚡ ' : ''}{c.nome}
                 </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
 
-        {/* Botão de Upload */}
-        {!previewData && (
+        {/* MODO 1: SINCRONIZAÇÃO DIRETA VIA API */}
+        {!previewData && activeTab === 'api' && (
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.label, { color: colors.textMuted }]}>2. Período do Extrato</Text>
+            <View style={styles.periodRow}>
+              {[7, 15, 30, 60].map((d) => (
+                <TouchableOpacity
+                  key={d}
+                  style={[
+                    styles.periodPill,
+                    {
+                      backgroundColor: selectedDays === d ? `${colors.primary}20` : colors.surfaceSubtle,
+                      borderColor: selectedDays === d ? colors.primary : colors.border,
+                    },
+                  ]}
+                  onPress={() => {
+                    setSelectedDays(d);
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <Text style={[styles.periodText, { color: selectedDays === d ? colors.primary : colors.text }]}>
+                    {d} dias
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={[styles.securityBadge, { backgroundColor: `${colors.success}15`, borderColor: `${colors.success}30` }]}>
+              <ShieldCheck size={16} color={colors.success} />
+              <Text style={[styles.securityText, { color: colors.success }]}>
+                Conexão Segura & Criptografada (Somente Leitura BACEN)
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.syncDirectBtn, { backgroundColor: colors.primary }]}
+              onPress={handleSyncApi}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Zap size={18} color="#fff" />
+                  <Text style={styles.syncDirectBtnText}>Sincronizar Extrato via API</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* MODO 2: BOTÃO DE UPLOAD MANUAL OFX / CSV */}
+        {!previewData && activeTab === 'file' && (
           <TouchableOpacity
             style={[styles.uploadBox, { backgroundColor: colors.surface, borderColor: colors.primary }]}
             onPress={handlePickDocument}
@@ -185,7 +313,7 @@ export const ImportScreen = () => {
                 </View>
                 <Text style={[styles.uploadTitle, { color: colors.text }]}>Selecionar Arquivo OFX ou CSV</Text>
                 <Text style={[styles.uploadSub, { color: colors.textMuted }]}>
-                  Extratos do Bradesco, Itaú, Nubank, Banco do Brasil, Inter, etc.
+                  Extratos do Bradesco, Itaú, Nubank, Banco do Brasil, Inter, Caixa, etc.
                 </Text>
                 <View style={styles.aiBadge}>
                   <Sparkles size={14} color="#6366f1" />
@@ -283,7 +411,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingTop: 50,
     paddingBottom: 16,
     paddingHorizontal: 20,
     borderBottomWidth: 1,

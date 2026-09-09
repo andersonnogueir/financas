@@ -14,9 +14,11 @@ import { api } from '../services/api';
 import { Account, Category } from '../types';
 import { ArrowLeft, Check, Calendar as CalendarIcon, Tag, Wallet } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const NewTransactionScreen = ({ navigation }: any) => {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [tipo, setTipo] = useState<'despesa' | 'receita'>('despesa');
   const [descricao, setDescricao] = useState('');
@@ -88,7 +90,16 @@ export const NewTransactionScreen = ({ navigation }: any) => {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: colors.surface,
+            borderBottomColor: colors.border,
+            paddingTop: Math.max(insets.top, 16) + 10,
+          },
+        ]}
+      >
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <ArrowLeft size={20} color={colors.text} />
         </TouchableOpacity>
@@ -96,7 +107,10 @@ export const NewTransactionScreen = ({ navigation }: any) => {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 60 + insets.bottom }]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Toggle Despesa / Receita */}
         <View style={[styles.typeToggle, { backgroundColor: colors.surfaceSubtle }]}>
           <TouchableOpacity
@@ -235,7 +249,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingTop: 50,
     paddingBottom: 16,
     paddingHorizontal: 20,
     flexDirection: 'row',

@@ -15,6 +15,8 @@ import { ImportScreen } from '../screens/ImportScreen';
 import { AccountsScreen } from '../screens/AccountsScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 // Ícones
 import { LayoutDashboard, ReceiptText, FileUp, Landmark, UserCircle } from 'lucide-react-native';
 
@@ -23,6 +25,7 @@ const Tab = createBottomTabNavigator();
 
 const MainTabs = () => {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -31,8 +34,8 @@ const MainTabs = () => {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          height: 60,
-          paddingBottom: 8,
+          height: 64 + insets.bottom,
+          paddingBottom: Math.max(insets.bottom, 10),
           paddingTop: 8,
         },
         tabBarActiveTintColor: colors.primary,

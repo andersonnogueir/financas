@@ -173,6 +173,13 @@ def _init_postgres_tables(conn):
             saldo_inicial NUMERIC NOT NULL DEFAULT 0.0,
             cor TEXT DEFAULT '#3b82f6',
             icone TEXT DEFAULT 'wallet',
+            banco_id TEXT,
+            integracao_tipo TEXT DEFAULT 'manual',
+            integracao_status TEXT DEFAULT 'desconectado',
+            integracao_agencia TEXT,
+            integracao_conta TEXT,
+            ultimo_sync TEXT,
+            sync_auto INTEGER DEFAULT 0,
             ativo INTEGER NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -229,6 +236,50 @@ def _init_postgres_tables(conn):
             UNIQUE(user_id, termo_busca)
         );
     """)
+    _migrate_postgres_tables(conn)
+    conn.commit()
+
+def _migrate_postgres_tables(conn):
+    cur = conn.cursor()
+    cols_to_add = [
+        ("banco_id", "TEXT"),
+        ("integracao_tipo", "TEXT DEFAULT 'manual'"),
+        ("integracao_status", "TEXT DEFAULT 'desconectado'"),
+        ("integracao_agencia", "TEXT"),
+        ("integracao_conta", "TEXT"),
+        ("ultimo_sync", "TEXT"),
+        ("sync_auto", "INTEGER DEFAULT 0")
+    ]
+    for col_name, col_def in cols_to_add:
+        try:
+            cur.execute(f"ALTER TABLE contas ADD COLUMN IF NOT EXISTS {col_name} {col_def};")
+        except Exception:
+            pass
+    conn.commit()
+
+def _migrate_sqlite_tables(conn):
+    cursor = conn.cursor()
+    try:
+        cursor.execute("PRAGMA table_info(contas)")
+        existing_cols = [row[1] for row in cursor.fetchall()]
+    except Exception:
+        existing_cols = []
+
+    cols_to_add = [
+        ("banco_id", "TEXT"),
+        ("integracao_tipo", "TEXT DEFAULT 'manual'"),
+        ("integracao_status", "TEXT DEFAULT 'desconectado'"),
+        ("integracao_agencia", "TEXT"),
+        ("integracao_conta", "TEXT"),
+        ("ultimo_sync", "TEXT"),
+        ("sync_auto", "INTEGER DEFAULT 0")
+    ]
+    for col_name, col_def in cols_to_add:
+        if col_name not in existing_cols:
+            try:
+                cursor.execute(f"ALTER TABLE contas ADD COLUMN {col_name} {col_def};")
+            except Exception:
+                pass
     conn.commit()
 
 def _init_sqlite_tables(conn):
@@ -254,11 +305,19 @@ def _init_sqlite_tables(conn):
             saldo_inicial REAL NOT NULL DEFAULT 0.0,
             cor TEXT DEFAULT '#3b82f6',
             icone TEXT DEFAULT 'wallet',
+            banco_id TEXT,
+            integracao_tipo TEXT DEFAULT 'manual',
+            integracao_status TEXT DEFAULT 'desconectado',
+            integracao_agencia TEXT,
+            integracao_conta TEXT,
+            ultimo_sync TEXT,
+            sync_auto INTEGER DEFAULT 0,
             ativo INTEGER NOT NULL DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
         );
     """)
+    _migrate_sqlite_tables(conn)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS categorias (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -751,3 +810,93 @@ def zerar_lancamentos_mes(user_id, mes, ano):
     conn.close()
 
     return deletadas
+
+# ==========================================
+# OPEN FINANCE & INTEGRAÇÃO BANCÁRIA
+# ==========================================
+
+def get_conta_by_id(conta_id, user_id, conn=None):
+    """Busca os detalhes de uma conta específica pertencente ao usuário."""
+    should_close = False
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM contas WHERE id = ? AND user_id = ? AND ativo = 1", (conta_id, user_id))
+    row = cursor.fetchone()
+
+    conta = dict(row) if row else None
+
+    if should_close:
+        conn.close()
+
+    return conta
+
+def conectar_conta_banco(conta_id, user_id, banco_id, integracao_tipo='open_finance_sandbox', agencia='', conta='', conn=None):
+    """Conecta ou atualiza a integração Open Finance de uma conta bancária."""
+    should_close = False
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE contas 
+        SET banco_id = ?, 
+            integracao_tipo = ?, 
+            integracao_status = 'conectado',
+            integracao_agencia = ?,
+            integracao_conta = ?
+        WHERE id = ? AND user_id = ?
+    """, (banco_id, integracao_tipo, agencia, conta, conta_id, user_id))
+
+    conn.commit()
+    if should_close:
+        conn.close()
+
+    return True
+
+def desconectar_conta_banco(conta_id, user_id, conn=None):
+    """Desvincula a integração Open Finance de uma conta bancária."""
+    should_close = False
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE contas 
+        SET integracao_status = 'desconectado',
+            integracao_tipo = 'manual'
+        WHERE id = ? AND user_id = ?
+    """, (conta_id, user_id))
+
+    conn.commit()
+    if should_close:
+        conn.close()
+
+    return True
+
+def atualizar_ultimo_sync(conta_id, user_id, timestamp_str=None, conn=None):
+    """Registra a data e hora do último sync bem-sucedido."""
+    should_close = False
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+
+    if not timestamp_str:
+        timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE contas 
+        SET ultimo_sync = ?, integracao_status = 'conectado'
+        WHERE id = ? AND user_id = ?
+    """, (timestamp_str, conta_id, user_id))
+
+    conn.commit()
+    if should_close:
+        conn.close()
+
+    return timestamp_str
