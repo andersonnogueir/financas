@@ -1,18 +1,6 @@
-const CACHE_NAME = 'finflow-cache-v1';
-const STATIC_ASSETS = [
-  '/',
-  '/login',
-  '/static/css/styles.css',
-  '/static/js/app.js',
-  '/static/manifest.json'
-];
+const CACHE_NAME = 'finflow-cache-v2';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS).catch((e) => console.log('SW cache fallback:', e));
-    })
-  );
   self.skipWaiting();
 });
 
@@ -20,7 +8,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys.map((key) => caches.delete(key))
       );
     })
   );
@@ -33,13 +21,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
+  // Network-First: busca sempre a versão mais recente do servidor
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      return cachedResponse || fetch(event.request).catch(() => {
-        if (event.request.mode === 'navigate') {
-          return caches.match('/');
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
         }
-      });
-    })
+        return networkResponse;
+      })
+      .catch(() => caches.match(event.request))
   );
 });

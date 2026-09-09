@@ -49,7 +49,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="/static/css/styles.css">
+  <link rel="stylesheet" href="/static/css/styles.css?v=2.2">
 </head>
 <body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-200">
 
@@ -1183,11 +1183,13 @@
   </footer>
 
   <!-- Script Principal -->
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/app.js?v=2.2"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/static/sw.js').catch(err => console.log('SW registration error:', err));
+        navigator.serviceWorker.register('/static/sw.js?v=2.2').then(reg => {
+          reg.update();
+        }).catch(err => console.log('SW registration error:', err));
       });
     }
   </script>
