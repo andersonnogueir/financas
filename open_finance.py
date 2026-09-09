@@ -370,7 +370,7 @@ def get_pluggy_api_key():
         print(f"[OpenFinance] Erro ao autenticar no Pluggy: {e}")
         return None
 
-def create_pluggy_connect_token(item_id=None):
+def create_pluggy_connect_token(item_id=None, client_user_id=None):
     """Gera um token efêmero de conexão para o Pluggy Connect Widget no frontend."""
     client_id = os.environ.get("PLUGGY_CLIENT_ID", "").strip()
     client_secret = os.environ.get("PLUGGY_CLIENT_SECRET", "").strip()
@@ -395,6 +395,8 @@ def create_pluggy_connect_token(item_id=None):
         body_data = {}
         if item_id:
             body_data["itemId"] = item_id
+        if client_user_id:
+            body_data["options"] = {"clientUserId": str(client_user_id)}
 
         payload = json.dumps(body_data).encode("utf-8")
         req = urllib.request.Request(url, data=payload, headers={
@@ -405,14 +407,17 @@ def create_pluggy_connect_token(item_id=None):
 
         with urllib.request.urlopen(req, timeout=10) as response:
             data = json.loads(response.read().decode("utf-8"))
+            access_token = data.get("accessToken") or data.get("connectToken")
             return {
                 "success": True,
                 "mode": "live",
-                "connectToken": data.get("accessToken")
+                "connectToken": access_token,
+                "accessToken": access_token
             }
     except Exception as e:
         print(f"[OpenFinance] Erro ao gerar connectToken no Pluggy: {e}")
         return {"success": False, "mode": "sandbox", "error": f"Erro ao comunicar com Pluggy.ai: {str(e)}"}
+
 
 
 def fetch_pluggy_accounts(item_id):

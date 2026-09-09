@@ -683,6 +683,7 @@ def list_open_finance_bancos():
     })
 
 @app.route("/api/open-finance/connect-token", methods=["GET", "POST"])
+@app.route("/api/connect-token", methods=["GET", "POST"])
 @login_required
 def get_open_finance_connect_token():
     """Gera token de autenticação efêmero para o Pluggy Connect Widget."""
@@ -690,8 +691,9 @@ def get_open_finance_connect_token():
     data = request.get_json() if request.is_json else {}
     item_id = data.get("item_id")
     
-    token_res = open_finance.create_pluggy_connect_token(item_id=item_id)
+    token_res = open_finance.create_pluggy_connect_token(item_id=item_id, client_user_id=user_id)
     return jsonify(token_res)
+
 
 @app.route("/api/open-finance/save-connection", methods=["POST"])
 @login_required
