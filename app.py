@@ -694,6 +694,31 @@ def get_open_finance_connect_token():
     token_res = open_finance.create_pluggy_connect_token(item_id=item_id, client_user_id=user_id)
     return jsonify(token_res)
 
+@app.route("/api/open-finance/diagnostico", methods=["GET"])
+@login_required
+def get_open_finance_diagnostico():
+    """Retorna diagnóstico seguro do status das credenciais da Pluggy para o frontend."""
+    client_id, client_secret = open_finance.get_pluggy_credentials()
+    has_id = bool(client_id)
+    has_secret = bool(client_secret)
+    id_preview = (client_id[:4] + "..." + client_id[-4:]) if len(client_id) > 8 else ("Configurado" if client_id else "Não encontrado")
+    
+    api_key, err = open_finance.get_pluggy_api_key()
+    
+    # Lista segura de variáveis existentes (sem expor os valores)
+    vars_present = [k for k in os.environ if any(x in k.upper() for x in ["PLUGGY", "CLIENT_ID", "CLIENT_SECRET"])]
+    
+    return jsonify({
+        "status_env": "ok" if (has_id and has_secret) else "ausente",
+        "has_client_id": has_id,
+        "has_client_secret": has_secret,
+        "client_id_preview": id_preview,
+        "pluggy_auth_sucesso": bool(api_key),
+        "erro_detalhado": err,
+        "variaveis_detectadas": vars_present
+    })
+
+
 
 @app.route("/api/open-finance/save-connection", methods=["POST"])
 @login_required

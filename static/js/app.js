@@ -1735,25 +1735,44 @@ async function setupOpenFinanceModalHandlers() {
 
         pluggyConnect.init();
       } else {
-        // Exibe diagnóstico detalhado
+        // Busca diagnóstico em tempo real do servidor
+        let diagData = {};
+        try {
+          const diagRes = await fetch('/api/open-finance/diagnostico');
+          diagData = await diagRes.json();
+        } catch (dErr) {}
+
+        const varsList = diagData.variaveis_detectadas?.length 
+          ? diagData.variaveis_detectadas.map(v => `<span class="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-mono text-[10px] rounded">${v}</span>`).join(' ')
+          : '<span class="text-rose-500 font-semibold">Nenhuma variável detectada no deploy atual</span>';
+
         Swal.fire({
           icon: 'warning',
-          title: 'Atenção: Chaves da Pluggy Pendentes',
+          title: 'Configuração da Pluggy Necessária',
           html: `
             <div class="text-left space-y-3 text-xs text-slate-600 dark:text-slate-300">
-              <p class="font-semibold text-rose-500">${tokenData.error || 'Não foi possível obter o token da Pluggy.'}</p>
-              <div class="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl space-y-1.5 border border-slate-200 dark:border-slate-700">
-                <p class="font-bold text-slate-800 dark:text-white">Como ativar a conexão com seu banco real:</p>
-                <p><b>1. Na Vercel:</b> Acesse seu projeto ➔ <b>Settings</b> ➔ <b>Environment Variables</b> e adicione <code>PLUGGY_CLIENT_ID</code> e <code>PLUGGY_CLIENT_SECRET</code>.</p>
-                <p><b>2. Redeploy:</b> Acesse a aba <b>Deployments</b> ➔ clique nos <code>...</code> ➔ <b>Redeploy</b> para aplicar as novas variáveis.</p>
-                <p><b>3. No Local (Localhost):</b> Crie um arquivo <code>.env</code> na raiz do projeto com as chaves.</p>
+              <div class="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-xl space-y-1">
+                <p class="font-bold text-rose-600 dark:text-rose-400">Diagnóstico do Servidor:</p>
+                <p class="text-slate-700 dark:text-slate-300 leading-relaxed">${diagData.erro_detalhado || tokenData.error || 'Credenciais da Pluggy não encontradas ou inválidas.'}</p>
+                <p class="text-[11px] text-slate-500 mt-1">Variáveis no servidor: ${varsList}</p>
+              </div>
+
+              <div class="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl space-y-2 border border-slate-200 dark:border-slate-700">
+                <p class="font-bold text-slate-800 dark:text-white">Passo a Passo para Ativar na Vercel:</p>
+                <ol class="list-decimal list-inside space-y-1 text-slate-600 dark:text-slate-300">
+                  <li>No painel da <b>Vercel</b> ➔ acesse <b>Settings</b> ➔ <b>Environment Variables</b>.</li>
+                  <li>Adicione: <code>PLUGGY_CLIENT_ID</code> e <code>PLUGGY_CLIENT_SECRET</code> (ou <code>CLIENT_ID</code> e <code>CLIENT_SECRET</code>).</li>
+                  <li>Marque as 3 caixas: <b>Production</b>, <b>Preview</b> e <b>Development</b>.</li>
+                  <li>Vá na aba <b>Deployments</b> ➔ clique nos <b>...</b> do último deploy ➔ clique em <b>Redeploy</b>.</li>
+                </ol>
               </div>
             </div>
           `,
-          confirmButtonText: 'Entendido',
+          confirmButtonText: 'Entendi, vou verificar',
           confirmButtonColor: '#4f46e5'
         });
       }
+
     } catch (err) {
       Swal.close();
       console.error('Erro ao chamar connect-token:', err);
