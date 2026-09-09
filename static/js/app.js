@@ -26,7 +26,9 @@ const state = {
   },
   charts: {
     categorias: null,
-    historico: null
+    historico: null,
+    evolucao: null,
+    gastosDiarios: null
   }
 };
 
@@ -353,9 +355,11 @@ async function loadDashboard() {
     const sinal = data.balanco_mes >= 0 ? '+' : '';
     balancoEl.innerHTML = `Balanço mensal: <b class="${data.balanco_mes >= 0 ? 'text-emerald-500' : 'text-rose-500'}">${sinal}${formatBRL(data.balanco_mes)}</b>`;
 
-    renderContasDashboard(data.contas);
+    renderInsightsIA(data.insights_ia, data.despesas_por_categoria);
     renderChartCategorias(data.despesas_por_categoria);
     renderChartHistorico(data.historico_meses);
+    renderChartEvolucaoSaldo(data.evolucao_saldo);
+    renderChartGastosDiarios(data.despesas_diarias);
     renderAlertas(data.alertas);
 
     lucide.createIcons();
@@ -364,65 +368,87 @@ async function loadDashboard() {
   }
 }
 
-function renderContasDashboard(contas) {
-  const container = document.getElementById('grid-contas-dashboard');
+function renderInsightsIA(insights, despesasPorCategoria) {
+  const container = document.getElementById('card-insights-ia-container');
+  const sugestoesContainer = document.getElementById('insights-ia-sugestoes');
+  const badgeSaude = document.getElementById('badge-saude-financeira');
+  const maiorCatNome = document.getElementById('maior-cat-nome');
+  const maiorCatPct = document.getElementById('maior-cat-pct');
+  const maiorCatValor = document.getElementById('maior-cat-valor');
+  const maiorCatIconBox = document.getElementById('maior-cat-icon-box');
+  const labelPoupanca = document.getElementById('label-taxa-poupanca');
+  const barPoupanca = document.getElementById('bar-taxa-poupanca');
+
   if (!container) return;
 
-  if (contas.length === 0) {
-    container.innerHTML = `
-      <div class="col-span-full p-8 text-center bg-white dark:bg-slate-900/90 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
-        <div class="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-500 flex items-center justify-center mx-auto mb-2.5">
-          <i data-lucide="credit-card" class="w-5 h-5"></i>
-        </div>
-        <p class="text-xs font-semibold text-slate-700 dark:text-slate-300">Nenhuma conta cadastrada ainda</p>
-        <p class="text-[11px] text-slate-400 mt-0.5">Adicione sua conta corrente, carteira ou cartão para começar a controlar.</p>
-        <button onclick="document.getElementById('btn-quick-new-account').click()" class="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition">
-          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-          Cadastrar Primeira Conta
-        </button>
-      </div>
-    `;
+  if (!insights) {
+    if (sugestoesContainer) sugestoesContainer.innerHTML = '<p class="text-xs text-slate-400">Carregando análise da IA...</p>';
     return;
   }
 
-  container.innerHTML = contas.map(c => {
-    return `
-    <div class="bank-card bg-white dark:bg-slate-900/90 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col justify-between transition hover:shadow-md" style="--account-color: ${c.cor};">
-      <div>
-        <div class="flex items-center justify-between mb-2">
-          <div class="flex items-center gap-2.5 min-w-0">
-            <div class="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm" style="background-color: ${c.cor};">
-              <i data-lucide="${c.tipo === 'Carteira' ? 'wallet' : (c.tipo === 'Investimento' ? 'trending-up' : 'landmark')}" class="w-4 h-4"></i>
-            </div>
-            <div class="min-w-0">
-              <h4 class="text-xs font-bold text-slate-900 dark:text-white truncate max-w-[120px]" title="${c.nome}">${c.nome}</h4>
-              <span class="text-[10px] text-slate-400 font-medium truncate block">${c.instituicao || c.tipo}</span>
-            </div>
-          </div>
-          <span class="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-semibold border border-slate-200/60 dark:border-slate-700/60 shrink-0">${c.tipo}</span>
+  // 1. Sugestões da IA
+  if (sugestoesContainer) {
+    const sugestoes = insights.sugestoes || [];
+    if (sugestoes.length === 0) {
+      sugestoesContainer.innerHTML = '<p class="text-xs text-slate-300">Nenhuma movimentação para analisar neste período.</p>';
+    } else {
+      sugestoesContainer.innerHTML = sugestoes.map(s => `
+        <div class="flex items-start gap-2 text-xs leading-relaxed">
+          <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-1.5 shrink-0"></span>
+          <span>${s}</span>
         </div>
+      `).join('');
+    }
+  }
 
-        <!-- Botão Ação Rápida: Importar Extrato OFX/CSV -->
-        <div class="my-2.5">
-          <button onclick="abrirModalImportacao(${c.id})" title="Importar extrato OFX/CSV para esta conta" class="w-full inline-flex items-center justify-center gap-1.5 text-[10px] font-bold py-1.5 px-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/40 transition">
-            <i data-lucide="file-up" class="w-3 h-3"></i>
-            <span>Importar Extrato</span>
-          </button>
-        </div>
-      </div>
+  // 2. Badge de Saúde Financeira
+  if (badgeSaude) {
+    const status = insights.status_saude || 'neutro';
+    if (status === 'excelente') {
+      badgeSaude.textContent = 'Excelente (Poupança Alta)';
+      badgeSaude.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+    } else if (status === 'estavel') {
+      badgeSaude.textContent = 'Equilibrado';
+      badgeSaude.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40';
+    } else if (status === 'alerta') {
+      badgeSaude.textContent = 'Alerta de Gastos';
+      badgeSaude.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40';
+    } else {
+      badgeSaude.textContent = 'Sem Lançamentos';
+      badgeSaude.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-500/20 text-slate-300 border border-slate-500/40';
+    }
+  }
 
-      <div class="pt-2.5 border-t border-slate-100 dark:border-slate-800/60 flex items-end justify-between">
-        <div>
-          <span class="text-[10px] uppercase font-semibold text-slate-400 dark:text-slate-500">Saldo Atual</span>
-          <div class="text-base font-black ${c.saldo_atual >= 0 ? 'text-slate-900 dark:text-white' : 'text-rose-500'}">
-            ${formatBRL(c.saldo_atual)}
-          </div>
-        </div>
-        <span class="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">Ativa</span>
-      </div>
-    </div>
-    `;
-  }).join('');
+  // 3. Maior Categoria de Gastos
+  const maiorCat = insights.maior_categoria;
+  if (maiorCat) {
+    if (maiorCatNome) maiorCatNome.textContent = maiorCat.nome;
+    if (maiorCatPct) maiorCatPct.textContent = `${maiorCat.percentual}% do total de despesas`;
+    if (maiorCatValor) maiorCatValor.textContent = formatBRL(maiorCat.total);
+    if (maiorCatIconBox) {
+      maiorCatIconBox.style.backgroundColor = (maiorCat.cor || '#6366f1') + '33';
+      maiorCatIconBox.style.color = maiorCat.cor || '#a5b4fc';
+      maiorCatIconBox.innerHTML = `<i data-lucide="${maiorCat.icone || 'tag'}" class="w-3.5 h-3.5"></i>`;
+    }
+  } else {
+    if (maiorCatNome) maiorCatNome.textContent = 'Sem despesas';
+    if (maiorCatPct) maiorCatPct.textContent = '0% do total';
+    if (maiorCatValor) maiorCatValor.textContent = formatBRL(0);
+  }
+
+  // 4. Taxa de Poupança
+  const poupanca = Math.max(0, Math.min(100, insights.taxa_poupanca || 0));
+  if (labelPoupanca) labelPoupanca.textContent = `${insights.taxa_poupanca || 0}%`;
+  if (barPoupanca) {
+    barPoupanca.style.width = `${poupanca}%`;
+    if (insights.taxa_poupanca >= 20) {
+      barPoupanca.className = 'bg-gradient-to-r from-emerald-500 to-teal-400 h-2 rounded-full transition-all duration-500';
+    } else if (insights.taxa_poupanca > 0) {
+      barPoupanca.className = 'bg-gradient-to-r from-indigo-500 to-cyan-400 h-2 rounded-full transition-all duration-500';
+    } else {
+      barPoupanca.className = 'bg-gradient-to-r from-rose-500 to-amber-500 h-2 rounded-full transition-all duration-500';
+    }
+  }
 }
 
 function renderChartCategorias(despesasPorCategoria) {
@@ -448,7 +474,7 @@ function renderChartCategorias(despesasPorCategoria) {
   if (emptyMsg) emptyMsg.classList.add('hidden');
 
   const isDark = document.documentElement.classList.contains('dark');
-  const labels = despesasPorCategoria.map(d => d.categoria);
+  const labels = despesasPorCategoria.map(d => `${d.categoria} (${d.percentual}%)`);
   const dataValues = despesasPorCategoria.map(d => d.total);
   const bgColors = despesasPorCategoria.map(d => d.cor || '#6366f1');
 
@@ -462,7 +488,7 @@ function renderChartCategorias(despesasPorCategoria) {
           backgroundColor: bgColors,
           borderWidth: 2,
           borderColor: isDark ? '#0f172a' : '#ffffff',
-          hoverOffset: 4
+          hoverOffset: 6
         }]
       },
       options: {
@@ -497,7 +523,7 @@ function renderChartCategorias(despesasPorCategoria) {
             }
           }
         },
-        cutout: '72%'
+        cutout: '70%'
       }
     });
   } catch (err) {
@@ -591,6 +617,168 @@ function renderChartHistorico(historico) {
     });
   } catch (err) {
     console.error('Erro ao renderizar gráfico de histórico:', err);
+  }
+}
+
+function renderChartEvolucaoSaldo(evolucao) {
+  const ctx = document.getElementById('chart-evolucao-saldo');
+  if (!ctx) return;
+
+  if (state.charts.evolucao) {
+    try { state.charts.evolucao.destroy(); } catch (e) {}
+  }
+
+  if (typeof Chart === 'undefined' || !evolucao || evolucao.length === 0) {
+    return;
+  }
+
+  const isDark = document.documentElement.classList.contains('dark');
+  const labels = evolucao.map(e => e.label);
+  const dataValues = evolucao.map(e => e.saldo_acumulado);
+
+  try {
+    state.charts.evolucao = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Saldo Acumulado',
+          data: dataValues,
+          borderColor: '#06b6d4',
+          backgroundColor: isDark ? 'rgba(6, 182, 212, 0.12)' : 'rgba(6, 182, 212, 0.08)',
+          fill: true,
+          tension: 0.35,
+          borderWidth: 2.5,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#06b6d4',
+          pointBorderColor: isDark ? '#0f172a' : '#ffffff',
+          pointBorderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: isDark ? '#1e293b' : '#ffffff',
+            titleColor: isDark ? '#f8fafc' : '#0f172a',
+            bodyColor: isDark ? '#cbd5e1' : '#475569',
+            borderColor: isDark ? '#334155' : '#e2e8f0',
+            borderWidth: 1,
+            padding: 10,
+            callbacks: {
+              label: function(context) {
+                return ` Saldo Patrimonial: ${formatBRL(context.raw)}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 10, family: 'Inter' } }
+          },
+          y: {
+            grid: { color: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' },
+            ticks: {
+              color: isDark ? '#94a3b8' : '#64748b',
+              font: { size: 10, family: 'Inter' },
+              callback: function(value) { return 'R$ ' + value.toLocaleString('pt-BR'); }
+            }
+          }
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Erro ao renderizar gráfico de evolução de saldo:', err);
+  }
+}
+
+function renderChartGastosDiarios(despesasDiarias) {
+  const ctx = document.getElementById('chart-gastos-diarios');
+  const emptyMsg = document.getElementById('chart-diarios-empty');
+  if (!ctx) return;
+
+  if (state.charts.gastosDiarios) {
+    try { state.charts.gastosDiarios.destroy(); } catch (e) {}
+  }
+
+  if (typeof Chart === 'undefined') {
+    return;
+  }
+
+  if (!despesasDiarias || despesasDiarias.length === 0) {
+    ctx.style.display = 'none';
+    if (emptyMsg) emptyMsg.classList.remove('hidden');
+    return;
+  }
+
+  ctx.style.display = 'block';
+  if (emptyMsg) emptyMsg.classList.add('hidden');
+
+  const isDark = document.documentElement.classList.contains('dark');
+  const labels = despesasDiarias.map(d => `Dia ${d.dia}`);
+  const dataValues = despesasDiarias.map(d => d.total);
+
+  try {
+    state.charts.gastosDiarios = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Despesas do Dia',
+          data: dataValues,
+          borderColor: '#f43f5e',
+          backgroundColor: isDark ? 'rgba(244, 63, 94, 0.12)' : 'rgba(244, 63, 94, 0.08)',
+          fill: true,
+          tension: 0.25,
+          borderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#f43f5e',
+          pointBorderColor: isDark ? '#0f172a' : '#ffffff',
+          pointBorderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: isDark ? '#1e293b' : '#ffffff',
+            titleColor: isDark ? '#f8fafc' : '#0f172a',
+            bodyColor: isDark ? '#cbd5e1' : '#475569',
+            borderColor: isDark ? '#334155' : '#e2e8f0',
+            borderWidth: 1,
+            padding: 10,
+            callbacks: {
+              label: function(context) {
+                return ` Gastos no Dia: ${formatBRL(context.raw)}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 10, family: 'Inter' } }
+          },
+          y: {
+            grid: { color: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' },
+            ticks: {
+              color: isDark ? '#94a3b8' : '#64748b',
+              font: { size: 10, family: 'Inter' },
+              callback: function(value) { return 'R$ ' + value.toLocaleString('pt-BR'); }
+            }
+          }
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Erro ao renderizar gráfico de gastos diários:', err);
   }
 }
 

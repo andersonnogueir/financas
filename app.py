@@ -488,7 +488,7 @@ def get_dashboard():
         c_item['total'] = c_total
         c_item['percentual'] = round((c_total / total_despesas * 100), 1) if total_despesas > 0 else 0.0
 
-    # 4. Evolução dos últimos 6 meses
+    # 4. Evolução dos últimos 6 meses e Saldo Acumulado
     historico_meses = []
     nomes_meses = ["", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
     
@@ -507,16 +507,38 @@ def get_dashboard():
         """, (user_id, m_str, y_str))
         hist_row = cursor.fetchone()
         
+        rec_val = float(hist_row['rec'])
+        desp_val = float(hist_row['desp'])
         historico_meses.append({
             "mes": dt.month,
             "ano": dt.year,
             "label": f"{nomes_meses[dt.month]}/{str(dt.year)[2:]}",
-            "receitas": float(hist_row['rec']),
-            "despesas": float(hist_row['desp']),
-            "saldo": round(float(hist_row['rec']) - float(hist_row['desp']), 2)
+            "receitas": rec_val,
+            "despesas": desp_val,
+            "saldo": round(rec_val - desp_val, 2)
         })
 
-    # 5. Alertas: Contas a vencer nos próximos 7 dias ou vencidas
+    # Tendência de Saldo Acumulado
+    evolucao_saldo = []
+    saldo_acumulado_temp = round(saldo_consolidado_geral - (total_receitas - total_despesas), 2)
+    for h in historico_meses:
+        saldo_acumulado_temp = round(saldo_acumulado_temp + h['saldo'], 2)
+        evolucao_saldo.append({
+            "label": h['label'],
+            "saldo_acumulado": saldo_acumulado_temp
+        })
+
+    # 5. Gastos Diários do Mês (Linha do Tempo)
+    cursor.execute("""
+        SELECT CAST(strftime('%d', data) AS INTEGER) as dia, SUM(valor) as total
+        FROM transacoes
+        WHERE user_id = ? AND tipo = 'despesa' AND strftime('%m', data) = ? AND strftime('%Y', data) = ?
+        GROUP BY dia
+        ORDER BY dia ASC
+    """, (user_id, mes_str, ano_str))
+    despesas_diarias = [{"dia": int(row['dia']), "total": round(float(row['total']), 2)} for row in cursor.fetchall()]
+
+    # 6. Alertas: Contas a vencer nos próximos 7 dias ou vencidas
     hoje_str = hoje.strftime('%Y-%m-%d')
     limite_7d_str = (hoje + relativedelta(days=7)).strftime('%Y-%m-%d')
     cursor.execute("""
@@ -541,6 +563,53 @@ def get_dashboard():
         if 'valor' in a and a['valor'] is not None:
             a['valor'] = float(a['valor'])
 
+    # 7. Motor de Insights Financeiros Inteligentes com IA
+    dt_anterior = data_ref - relativedelta(months=1)
+    m_ant_str = f"{dt_anterior.month:02d}"
+    y_ant_str = str(dt_anterior.year)
+    cursor.execute("""
+        SELECT COALESCE(SUM(valor), 0) as total_ant
+        FROM transacoes
+        WHERE user_id = ? AND tipo = 'despesa' AND strftime('%m', data) = ? AND strftime('%Y', data) = ?
+    """, (user_id, m_ant_str, y_ant_str))
+    total_despesas_ant = float(cursor.fetchone()['total_ant'] or 0)
+
+    taxa_poupanca = round(((total_receitas - total_despesas) / total_receitas * 100), 1) if total_receitas > 0 else 0.0
+
+    maior_cat = despesas_por_categoria[0] if despesas_por_categoria else None
+    diff_gastos_pct = round(((total_despesas - total_despesas_ant) / total_despesas_ant * 100), 1) if total_despesas_ant > 0 else 0.0
+
+    sugestoes_ia = []
+    if maior_cat and total_despesas > 0:
+        sugestoes_ia.append(f"Seu maior centro de custo é <b>{maior_cat['nome']}</b>, consumindo <b>{maior_cat['percentual']}%</b> (R$ {maior_cat['total']:.2f}) de todas as suas despesas.")
+    
+    if total_receitas > 0:
+        if taxa_poupanca >= 20:
+            sugestoes_ia.append(f"Parabéns! Sua taxa de poupança está em <b>{taxa_poupanca}%</b>, acima da meta recomendada de 20%.")
+        elif taxa_poupanca > 0:
+            sugestoes_ia.append(f"Você está economizando <b>{taxa_poupanca}%</b> da sua renda. Reduzir pequenos gastos em {maior_cat['nome'] if maior_cat else 'despesas variáveis'} pode acelerar sua reserva.")
+        else:
+            sugestoes_ia.append(f"Atenção: suas despesas superaram as receitas em <b>R$ {abs(balanco_mes):.2f}</b> neste mês. Priorize pagamentos essenciais.")
+    elif total_despesas > 0:
+        sugestoes_ia.append("Nenhuma receita registrada até o momento neste mês. Não se esqueça de lançar seu salário ou recebimentos.")
+    else:
+        sugestoes_ia.append("Mês sem lançamentos ainda. Importe seu extrato (OFX/CSV) ou cadastre suas despesas para ver a análise completa.")
+
+    if total_despesas_ant > 0 and total_despesas > 0:
+        if diff_gastos_pct > 10:
+            sugestoes_ia.append(f"Seus gastos totais estão <b>+{diff_gastos_pct}%</b> maiores em relação ao mês anterior.")
+        elif diff_gastos_pct < -10:
+            sugestoes_ia.append(f"Ótimo controle! Seus gastos caíram <b>{abs(diff_gastos_pct)}%</b> comparado ao mês passado.")
+
+    insights_ia = {
+        "maior_categoria": maior_cat,
+        "total_despesas_anterior": total_despesas_ant,
+        "diff_gastos_pct": diff_gastos_pct,
+        "taxa_poupanca": taxa_poupanca,
+        "status_saude": "excelente" if (total_receitas > 0 and taxa_poupanca >= 20) else ("estavel" if (total_receitas > 0 and taxa_poupanca >= 0) else ("alerta" if (total_receitas > 0 and total_despesas > total_receitas) else "neutro")),
+        "sugestoes": sugestoes_ia
+    }
+
     conn.close()
 
     return jsonify({
@@ -558,7 +627,10 @@ def get_dashboard():
         "contas": contas,
         "despesas_por_categoria": despesas_por_categoria,
         "historico_meses": historico_meses,
-        "alertas": alertas
+        "evolucao_saldo": evolucao_saldo,
+        "despesas_diarias": despesas_diarias,
+        "alertas": alertas,
+        "insights_ia": insights_ia
     })
 
 # ==========================================

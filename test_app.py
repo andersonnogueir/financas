@@ -261,5 +261,28 @@ class TestFinFlowBankImport(unittest.TestCase):
         self.assertIn("IFOOD", res_csv.data.decode('utf-8'))
         print("OK: Dashboard recalculado e exportacao CSV validada com sucesso!")
 
+    def test_07_ai_insights_and_charts_metrics(self):
+        self.login_test_user()
+        res = self.app.get('/api/dashboard?mes=8&ano=2026')
+        self.assertEqual(res.status_code, 200)
+        data = json.loads(res.data)
+
+        # Validar estrutura de Insights IA
+        self.assertIn('insights_ia', data)
+        insights = data['insights_ia']
+        self.assertIn('maior_categoria', insights)
+        self.assertIn('taxa_poupanca', insights)
+        self.assertIn('status_saude', insights)
+        self.assertIn('sugestoes', insights)
+        self.assertGreater(len(insights['sugestoes']), 0)
+
+        # Validar dados dos 4 gráficos
+        self.assertIn('despesas_por_categoria', data)
+        self.assertIn('historico_meses', data)
+        self.assertIn('evolucao_saldo', data)
+        self.assertIn('despesas_diarias', data)
+        self.assertEqual(len(data['evolucao_saldo']), 6)
+        print("OK: Motor de IA de Insights Financeiros e dados dos 4 graficos validados com sucesso!")
+
 if __name__ == '__main__':
     unittest.main()
