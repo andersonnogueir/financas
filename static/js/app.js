@@ -386,7 +386,6 @@ function renderContasDashboard(contas) {
   }
 
   container.innerHTML = contas.map(c => {
-    const isConectada = c.integracao_status === 'conectado';
     return `
     <div class="bank-card bg-white dark:bg-slate-900/90 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col justify-between transition hover:shadow-md" style="--account-color: ${c.cor};">
       <div>
@@ -403,23 +402,12 @@ function renderContasDashboard(contas) {
           <span class="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-semibold border border-slate-200/60 dark:border-slate-700/60 shrink-0">${c.tipo}</span>
         </div>
 
-        <!-- Open Finance Badge & Botão de Sync Rápido -->
-        <div class="my-2 flex items-center justify-between gap-1">
-          ${isConectada ? `
-            <span class="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40">
-              <i data-lucide="zap" class="w-2.5 h-2.5"></i>
-              <span>API Conectada</span>
-            </span>
-            <button onclick="sincronizarExtratoConta(${c.id})" title="Sincronizar extrato bancário agora via API" class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/50 transition">
-              <i data-lucide="refresh-cw" class="w-2.5 h-2.5"></i>
-              <span>Sincronizar</span>
-            </button>
-          ` : `
-            <button onclick="abrirModalOpenFinance(${c.id})" title="Conectar banco via Open Finance" class="inline-flex items-center gap-1 text-[9px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 transition">
-              <i data-lucide="link" class="w-2.5 h-2.5"></i>
-              <span>Conectar Banco</span>
-            </button>
-          `}
+        <!-- Botão Ação Rápida: Importar Extrato OFX/CSV -->
+        <div class="my-2.5">
+          <button onclick="abrirModalImportacao(${c.id})" title="Importar extrato OFX/CSV para esta conta" class="w-full inline-flex items-center justify-center gap-1.5 text-[10px] font-bold py-1.5 px-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/40 transition">
+            <i data-lucide="file-up" class="w-3 h-3"></i>
+            <span>Importar Extrato</span>
+          </button>
         </div>
       </div>
 
@@ -443,7 +431,11 @@ function renderChartCategorias(despesasPorCategoria) {
   if (!ctx) return;
 
   if (state.charts.categorias) {
-    state.charts.categorias.destroy();
+    try { state.charts.categorias.destroy(); } catch (e) {}
+  }
+
+  if (typeof Chart === 'undefined') {
+    return;
   }
 
   if (!despesasPorCategoria || despesasPorCategoria.length === 0) {
@@ -460,53 +452,57 @@ function renderChartCategorias(despesasPorCategoria) {
   const dataValues = despesasPorCategoria.map(d => d.total);
   const bgColors = despesasPorCategoria.map(d => d.cor || '#6366f1');
 
-  state.charts.categorias = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: labels,
-      datasets: [{
-        data: dataValues,
-        backgroundColor: bgColors,
-        borderWidth: 2,
-        borderColor: isDark ? '#0f172a' : '#ffffff',
-        hoverOffset: 4
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'bottom',
-          labels: {
-            color: isDark ? '#cbd5e1' : '#475569',
-            font: { size: 11, family: 'Inter', weight: 500 },
-            boxWidth: 10,
+  try {
+    state.charts.categorias = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: dataValues,
+          backgroundColor: bgColors,
+          borderWidth: 2,
+          borderColor: isDark ? '#0f172a' : '#ffffff',
+          hoverOffset: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: isDark ? '#cbd5e1' : '#475569',
+              font: { size: 11, family: 'Inter', weight: 500 },
+              boxWidth: 10,
+              padding: 10,
+              usePointStyle: true,
+              pointStyle: 'circle'
+            }
+          },
+          tooltip: {
+            backgroundColor: isDark ? '#1e293b' : '#ffffff',
+            titleColor: isDark ? '#f8fafc' : '#0f172a',
+            bodyColor: isDark ? '#cbd5e1' : '#475569',
+            borderColor: isDark ? '#334155' : '#e2e8f0',
+            borderWidth: 1,
             padding: 10,
-            usePointStyle: true,
-            pointStyle: 'circle'
-          }
-        },
-        tooltip: {
-          backgroundColor: isDark ? '#1e293b' : '#ffffff',
-          titleColor: isDark ? '#f8fafc' : '#0f172a',
-          bodyColor: isDark ? '#cbd5e1' : '#475569',
-          borderColor: isDark ? '#334155' : '#e2e8f0',
-          borderWidth: 1,
-          padding: 10,
-          boxPadding: 4,
-          callbacks: {
-            label: function(context) {
-              const label = context.label || '';
-              const value = formatBRL(context.raw);
-              return ` ${label}: ${value}`;
+            boxPadding: 4,
+            callbacks: {
+              label: function(context) {
+                const label = context.label || '';
+                const value = formatBRL(context.raw);
+                return ` ${label}: ${value}`;
+              }
             }
           }
-        }
-      },
-      cutout: '72%'
-    }
-  });
+        },
+        cutout: '72%'
+      }
+    });
+  } catch (err) {
+    console.error('Erro ao renderizar gráfico de categorias:', err);
+  }
 }
 
 function renderChartHistorico(historico) {
@@ -514,7 +510,11 @@ function renderChartHistorico(historico) {
   if (!ctx) return;
 
   if (state.charts.historico) {
-    state.charts.historico.destroy();
+    try { state.charts.historico.destroy(); } catch (e) {}
+  }
+
+  if (typeof Chart === 'undefined' || !historico || historico.length === 0) {
+    return;
   }
 
   const isDark = document.documentElement.classList.contains('dark');
@@ -522,72 +522,76 @@ function renderChartHistorico(historico) {
   const receitas = historico.map(h => h.receitas);
   const despesas = historico.map(h => h.despesas);
 
-  state.charts.historico = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [
-        {
-          label: 'Receitas',
-          data: receitas,
-          backgroundColor: '#10b981',
-          borderRadius: 6,
-          barPercentage: 0.55
-        },
-        {
-          label: 'Despesas',
-          data: despesas,
-          backgroundColor: '#f43f5e',
-          borderRadius: 6,
-          barPercentage: 0.55
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'top',
-          align: 'end',
-          labels: {
-            color: isDark ? '#cbd5e1' : '#475569',
-            font: { size: 11, family: 'Inter', weight: 500 },
-            boxWidth: 10,
-            usePointStyle: true,
-            pointStyle: 'circle'
+  try {
+    state.charts.historico = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Receitas',
+            data: receitas,
+            backgroundColor: '#10b981',
+            borderRadius: 6,
+            barPercentage: 0.55
+          },
+          {
+            label: 'Despesas',
+            data: despesas,
+            backgroundColor: '#f43f5e',
+            borderRadius: 6,
+            barPercentage: 0.55
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'top',
+            align: 'end',
+            labels: {
+              color: isDark ? '#cbd5e1' : '#475569',
+              font: { size: 11, family: 'Inter', weight: 500 },
+              boxWidth: 10,
+              usePointStyle: true,
+              pointStyle: 'circle'
+            }
+          },
+          tooltip: {
+            backgroundColor: isDark ? '#1e293b' : '#ffffff',
+            titleColor: isDark ? '#f8fafc' : '#0f172a',
+            bodyColor: isDark ? '#cbd5e1' : '#475569',
+            borderColor: isDark ? '#334155' : '#e2e8f0',
+            borderWidth: 1,
+            padding: 10,
+            callbacks: {
+              label: function(context) {
+                return ` ${context.dataset.label}: ${formatBRL(context.raw)}`;
+              }
+            }
           }
         },
-        tooltip: {
-          backgroundColor: isDark ? '#1e293b' : '#ffffff',
-          titleColor: isDark ? '#f8fafc' : '#0f172a',
-          bodyColor: isDark ? '#cbd5e1' : '#475569',
-          borderColor: isDark ? '#334155' : '#e2e8f0',
-          borderWidth: 1,
-          padding: 10,
-          callbacks: {
-            label: function(context) {
-              return ` ${context.dataset.label}: ${formatBRL(context.raw)}`;
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 10, family: 'Inter' } }
+          },
+          y: {
+            grid: { color: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' },
+            ticks: {
+              color: isDark ? '#94a3b8' : '#64748b',
+              font: { size: 10, family: 'Inter' },
+              callback: function(value) { return 'R$ ' + value.toLocaleString('pt-BR'); }
             }
           }
         }
-      },
-      scales: {
-        x: {
-          grid: { display: false },
-          ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 10, family: 'Inter' } }
-        },
-        y: {
-          grid: { color: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' },
-          ticks: {
-            color: isDark ? '#94a3b8' : '#64748b',
-            font: { size: 10, family: 'Inter' },
-            callback: function(value) { return 'R$ ' + value.toLocaleString('pt-BR'); }
-          }
-        }
       }
-    }
-  });
+    });
+  } catch (err) {
+    console.error('Erro ao renderizar gráfico de histórico:', err);
+  }
 }
 
 function renderAlertas(alertas) {
