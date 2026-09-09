@@ -342,26 +342,156 @@ def fetch_bank_transactions_sandbox(banco_id, conta_id, dias=30):
     return transacoes
 
 # =====================================================================
-# CONECTOR REAL (PLUGGY / BELVO / OPEN BANKING BRASIL)
+# CONECTOR REAL (PLUGGY OPEN FINANCE BRASIL)
 # =====================================================================
+
+import urllib.request
+import urllib.error
+
+PLUGGY_BASE_URL = "https://api.pluggy.ai"
+
+def get_pluggy_api_key():
+    """Obtém o token de autenticação (API Key) da Pluggy usando Client ID e Secret."""
+    client_id = os.environ.get("PLUGGY_CLIENT_ID", "").strip()
+    client_secret = os.environ.get("PLUGGY_CLIENT_SECRET", "").strip()
+
+    if not client_id or not client_secret:
+        return None
+
+    try:
+        url = f"{PLUGGY_BASE_URL}/auth"
+        payload = json.dumps({"clientId": client_id, "clientSecret": client_secret}).encode("utf-8")
+        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json", "User-Agent": "FinFlow/1.0"})
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            return data.get("apiKey")
+    except Exception as e:
+        print(f"[OpenFinance] Erro ao autenticar no Pluggy: {e}")
+        return None
+
+def create_pluggy_connect_token(item_id=None):
+    """Gera um token efêmero de conexão para o Pluggy Connect Widget no frontend."""
+    api_key = get_pluggy_api_key()
+    if not api_key:
+        return {"success": False, "mode": "sandbox", "error": "Credenciais Pluggy não configuradas. Usando modo Sandbox Local."}
+
+    try:
+        url = f"{PLUGGY_BASE_URL}/connect_token"
+        body_data = {}
+        if item_id:
+            body_data["itemId"] = item_id
+
+        payload = json.dumps(body_data).encode("utf-8")
+        req = urllib.request.Request(url, data=payload, headers={
+            "Content-Type": "application/json",
+            "X-API-KEY": api_key,
+            "User-Agent": "FinFlow/1.0"
+        })
+
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            return {
+                "success": True,
+                "mode": "live",
+                "connectToken": data.get("accessToken")
+            }
+    except Exception as e:
+        print(f"[OpenFinance] Erro ao gerar connectToken no Pluggy: {e}")
+        return {"success": False, "mode": "sandbox", "error": str(e)}
+
+def fetch_pluggy_accounts(item_id):
+    """Consulta as contas associadas a uma conexão Pluggy (Item)."""
+    api_key = get_pluggy_api_key()
+    if not api_key or not item_id:
+        return []
+
+    try:
+        url = f"{PLUGGY_BASE_URL}/accounts?itemId={item_id}"
+        req = urllib.request.Request(url, headers={
+            "X-API-KEY": api_key,
+            "User-Agent": "FinFlow/1.0"
+        })
+
+        with urllib.request.urlopen(req, timeout=12) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            return data.get("results", [])
+    except Exception as e:
+        print(f"[OpenFinance] Erro ao buscar contas no Pluggy: {e}")
+        return []
+
+def fetch_pluggy_live_transactions(account_id, dias=30):
+    """Consulta as transações reais de uma conta conectada ao Pluggy."""
+    api_key = get_pluggy_api_key()
+    if not api_key or not account_id:
+        return []
+
+    hoje = date.today()
+    data_inicio = (hoje - timedelta(days=dias)).strftime("%Y-%m-%d")
+
+    try:
+        url = f"{PLUGGY_BASE_URL}/transactions?accountId={account_id}&from={data_inicio}&pageSize=100"
+        req = urllib.request.Request(url, headers={
+            "X-API-KEY": api_key,
+            "User-Agent": "FinFlow/1.0"
+        })
+
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            results = data.get("results", [])
+
+            transacoes = []
+            for t in results:
+                raw_amount = float(t.get("amount", 0))
+                # Pluggy: transações negativas geralmente são despesas
+                tipo = "despesa" if raw_amount < 0 or t.get("type") == "DEBIT" else "receita"
+                valor_absoluto = abs(raw_amount)
+
+                # Formatar data YYYY-MM-DD
+                data_raw = t.get("date", "")[:10]
+                if not data_raw:
+                    data_raw = hoje.strftime("%Y-%m-%d")
+
+                desc = t.get("description") or t.get("cleanDescription") or "Transação Bancária"
+                fitid = f"PLUGGY-{t.get('id', '')}" if t.get("id") else generate_bank_fitid("pluggy", data_raw, 0, desc)
+
+                transacoes.append({
+                    "data": data_raw,
+                    "descricao": desc,
+                    "descricao_original": t.get("description", desc),
+                    "valor": round(valor_absoluto, 2),
+                    "tipo": tipo,
+                    "fitid": fitid,
+                    "moeda": t.get("currencyCode", "BRL"),
+                    "status_bancario": t.get("status", "COMPLETED")
+                })
+
+            transacoes.sort(key=lambda x: x["data"], reverse=True)
+            return transacoes
+    except Exception as e:
+        print(f"[OpenFinance] Erro ao buscar transações no Pluggy: {e}")
+        return []
 
 def fetch_bank_transactions_live(banco_id, conta_info, dias=30):
     """
     Conecta a agregadores de Open Finance reais caso chaves de API estejam configuradas.
     Fallback automático para Sandbox em Localhost.
     """
-    pluggy_client_id = os.environ.get("PLUGGY_CLIENT_ID")
-    pluggy_client_secret = os.environ.get("PLUGGY_CLIENT_SECRET")
+    account_id = conta_info.get("integracao_account_id")
+    item_id = conta_info.get("integracao_item_id")
 
-    # Se credenciais reais existirem e item_id estiver configurado
-    if pluggy_client_id and pluggy_client_secret and conta_info.get("integracao_item_id"):
-        try:
-            # Exemplo de chamada real ao Pluggy API
-            pass
-        except Exception as e:
-            print(f"[OpenFinance] Erro na chamada Pluggy Live: {e}")
+    if not account_id and item_id:
+        # Se temos o item_id mas não o account_id, busca a primeira conta do item
+        contas_pluggy = fetch_pluggy_accounts(item_id)
+        if contas_pluggy:
+            account_id = contas_pluggy[0].get("id")
 
-    # Fallback transparente para o motor de alta fidelidade
+    if account_id:
+        live_trans = fetch_pluggy_live_transactions(account_id, dias=dias)
+        if live_trans:
+            return live_trans
+
+    # Fallback transparente para Sandbox realista
     return fetch_bank_transactions_sandbox(banco_id, conta_info.get("id", 1), dias=dias)
 
 def fetch_bank_transactions(conta_dict, dias=30):
@@ -374,8 +504,9 @@ def fetch_bank_transactions(conta_dict, dias=30):
         banco_id = detect_bank_from_name(conta_dict.get("nome", ""), conta_dict.get("instituicao", ""))
 
     integracao_tipo = conta_dict.get("integracao_tipo", "open_finance_sandbox")
+    has_live_keys = bool(os.environ.get("PLUGGY_CLIENT_ID") and os.environ.get("PLUGGY_CLIENT_SECRET"))
 
-    if integracao_tipo == "pluggy_live" and os.environ.get("PLUGGY_CLIENT_ID"):
+    if (integracao_tipo == "pluggy_live" or has_live_keys) and conta_dict.get("integracao_item_id"):
         return fetch_bank_transactions_live(banco_id, conta_dict, dias=dias)
 
     return fetch_bank_transactions_sandbox(banco_id, conta_dict.get("id", 1), dias=dias)

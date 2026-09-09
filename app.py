@@ -682,6 +682,53 @@ def list_open_finance_bancos():
         "bancos": bancos
     })
 
+@app.route("/api/open-finance/connect-token", methods=["GET", "POST"])
+@login_required
+def get_open_finance_connect_token():
+    """Gera token de autenticação efêmero para o Pluggy Connect Widget."""
+    user_id = session['user_id']
+    data = request.get_json() if request.is_json else {}
+    item_id = data.get("item_id")
+    
+    token_res = open_finance.create_pluggy_connect_token(item_id=item_id)
+    return jsonify(token_res)
+
+@app.route("/api/open-finance/save-connection", methods=["POST"])
+@login_required
+def save_open_finance_connection():
+    """Salva o item_id e account_id gerados com sucesso pelo Pluggy Connect Widget."""
+    user_id = session['user_id']
+    data = request.get_json() or {}
+    conta_id = data.get("conta_id")
+    item_id = data.get("item_id")
+    account_id = data.get("account_id")
+    banco_id = data.get("banco_id") or "pluggy"
+    
+    if not conta_id or not item_id:
+        return jsonify({"error": "ID da conta e Item ID do Pluggy são obrigatórios"}), 400
+        
+    # Se account_id não foi passado, tenta buscar a primeira conta do item
+    if not account_id:
+        accounts = open_finance.fetch_pluggy_accounts(item_id)
+        if accounts:
+            account_id = accounts[0].get("id")
+            
+    database.conectar_conta_banco(
+        conta_id=int(conta_id),
+        user_id=user_id,
+        banco_id=banco_id,
+        integracao_tipo="pluggy_live",
+        item_id=item_id,
+        account_id=account_id
+    )
+    
+    return jsonify({
+        "success": True,
+        "message": "Conta bancária vinculada ao Open Finance com sucesso!",
+        "item_id": item_id,
+        "account_id": account_id
+    })
+
 @app.route("/api/open-finance/conectar", methods=["POST"])
 @login_required
 def conectar_banco():

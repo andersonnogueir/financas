@@ -49,3 +49,9 @@ financas.db
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Node & Mobile
+node_modules/
+.expo/
+.next/
+

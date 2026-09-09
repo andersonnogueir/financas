@@ -247,6 +247,8 @@ def _migrate_postgres_tables(conn):
         ("integracao_status", "TEXT DEFAULT 'desconectado'"),
         ("integracao_agencia", "TEXT"),
         ("integracao_conta", "TEXT"),
+        ("integracao_item_id", "TEXT"),
+        ("integracao_account_id", "TEXT"),
         ("ultimo_sync", "TEXT"),
         ("sync_auto", "INTEGER DEFAULT 0")
     ]
@@ -271,6 +273,8 @@ def _migrate_sqlite_tables(conn):
         ("integracao_status", "TEXT DEFAULT 'desconectado'"),
         ("integracao_agencia", "TEXT"),
         ("integracao_conta", "TEXT"),
+        ("integracao_item_id", "TEXT"),
+        ("integracao_account_id", "TEXT"),
         ("ultimo_sync", "TEXT"),
         ("sync_auto", "INTEGER DEFAULT 0")
     ]
@@ -833,7 +837,7 @@ def get_conta_by_id(conta_id, user_id, conn=None):
 
     return conta
 
-def conectar_conta_banco(conta_id, user_id, banco_id, integracao_tipo='open_finance_sandbox', agencia='', conta='', conn=None):
+def conectar_conta_banco(conta_id, user_id, banco_id, integracao_tipo='open_finance_sandbox', agencia='', conta='', item_id='', account_id='', conn=None):
     """Conecta ou atualiza a integração Open Finance de uma conta bancária."""
     should_close = False
     if conn is None:
@@ -847,9 +851,11 @@ def conectar_conta_banco(conta_id, user_id, banco_id, integracao_tipo='open_fina
             integracao_tipo = ?, 
             integracao_status = 'conectado',
             integracao_agencia = ?,
-            integracao_conta = ?
+            integracao_conta = ?,
+            integracao_item_id = COALESCE(NULLIF(?, ''), integracao_item_id),
+            integracao_account_id = COALESCE(NULLIF(?, ''), integracao_account_id)
         WHERE id = ? AND user_id = ?
-    """, (banco_id, integracao_tipo, agencia, conta, conta_id, user_id))
+    """, (banco_id, integracao_tipo, agencia, conta, item_id, account_id, conta_id, user_id))
 
     conn.commit()
     if should_close:

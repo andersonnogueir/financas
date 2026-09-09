@@ -1667,6 +1667,60 @@ async function setupOpenFinanceModalHandlers() {
       return;
     }
 
+    // 1. Tenta verificar se há credenciais Live (Pluggy Connect Token)
+    try {
+      const tokenRes = await fetch('/api/open-finance/connect-token');
+      const tokenData = await tokenRes.json();
+
+      if (tokenData.success && tokenData.connectToken && typeof PluggyConnect !== 'undefined') {
+        // Modo Oficial ao Vivo (Open Finance Brasil via Pluggy)
+        closeModal('modal-open-finance');
+        
+        const pluggyConnect = new PluggyConnect({
+          connectToken: tokenData.connectToken,
+          includeSandbox: true,
+          onSuccess: async (itemData) => {
+            try {
+              const itemId = itemData.item ? itemData.item.id : itemData.id;
+              const connectorName = itemData.item?.connector?.name || 'pluggy';
+              
+              await fetch('/api/open-finance/save-connection', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  conta_id: parseInt(contaId),
+                  item_id: itemId,
+                  banco_id: connectorName.toLowerCase()
+                })
+              });
+              
+              await loadAllData();
+              Swal.fire({
+                icon: 'success',
+                title: 'Banco Conectado ao Vivo!',
+                text: 'Sua conta bancária real foi vinculada com sucesso via Open Finance Brasil (Modo Somente Leitura)!',
+                confirmButtonColor: '#4f46e5'
+              });
+            } catch (saveErr) {
+              console.error('Erro ao salvar conexão:', saveErr);
+            }
+          },
+          onError: (error) => {
+            console.error('Pluggy Connect Error:', error);
+          },
+          onClose: () => {
+            console.log('Pluggy Connect fechado pelo usuário.');
+          }
+        });
+
+        pluggyConnect.init();
+        return;
+      }
+    } catch (tokenErr) {
+      console.log('Modo Sandbox ativo:', tokenErr);
+    }
+
+    // 2. Modo Sandbox de Alta Fidelidade (Localhost / Demonstração)
     if (!selectedOpenFinanceBank) {
       Swal.fire({ icon: 'warning', title: 'Selecione um Banco', text: 'Por favor, escolha uma instituição financeira na lista.' });
       return;
