@@ -518,17 +518,33 @@ def get_dashboard():
             "saldo": round(rec_val - desp_val, 2)
         })
 
-    # Tendência de Saldo Acumulado
-    evolucao_saldo = []
-    saldo_acumulado_temp = round(saldo_consolidado_geral - (total_receitas - total_despesas), 2)
-    for h in historico_meses:
-        saldo_acumulado_temp = round(saldo_acumulado_temp + h['saldo'], 2)
-        evolucao_saldo.append({
-            "label": h['label'],
-            "saldo_acumulado": saldo_acumulado_temp
-        })
+    # 5. Maiores Despesas do Mês (Top 5 - Dados 100% Reais do Banco de Dados)
+    try:
+        cursor.execute("""
+            SELECT t.descricao, t.valor, t.data,
+                   COALESCE(c.nome, 'Sem Categoria') as categoria_nome,
+                   COALESCE(c.cor, '#f43f5e') as categoria_cor,
+                   COALESCE(c.icone, 'tag') as categoria_icone
+            FROM transacoes t
+            LEFT JOIN categorias c ON t.categoria_id = c.id
+            WHERE t.user_id = ? AND t.tipo = 'despesa' AND strftime('%m', t.data) = ? AND strftime('%Y', t.data) = ?
+            ORDER BY t.valor DESC
+            LIMIT 5
+        """, (user_id, mes_str, ano_str))
+        top_despesas = []
+        for r in cursor.fetchall():
+            row_dict = dict(r)
+            if row_dict.get('data') and isinstance(row_dict['data'], (date, datetime)):
+                row_dict['data'] = row_dict['data'].strftime('%Y-%m-%d')
+            elif row_dict.get('data'):
+                row_dict['data'] = str(row_dict['data'])[:10]
+            if 'valor' in row_dict and row_dict['valor'] is not None:
+                row_dict['valor'] = float(row_dict['valor'])
+            top_despesas.append(row_dict)
+    except Exception as e:
+        top_despesas = []
 
-    # 5. Gastos Diários do Mês (Linha do Tempo)
+    # 6. Gastos Diários do Mês (Linha do Tempo)
     try:
         cursor.execute("""
             SELECT CAST(strftime('%d', data) AS INTEGER) as dia, SUM(valor) as total
@@ -541,7 +557,7 @@ def get_dashboard():
     except Exception as e:
         despesas_diarias = []
 
-    # 6. Alertas: Contas a vencer nos próximos 7 dias ou vencidas
+    # 7. Alertas: Contas a vencer nos próximos 7 dias ou vencidas
     hoje_str = hoje.strftime('%Y-%m-%d')
     limite_7d_str = (hoje + relativedelta(days=7)).strftime('%Y-%m-%d')
     cursor.execute("""
@@ -566,7 +582,7 @@ def get_dashboard():
         if 'valor' in a and a['valor'] is not None:
             a['valor'] = float(a['valor'])
 
-    # 7. Motor de Insights Financeiros Inteligentes com IA
+    # 8. Motor de Insights Financeiros Inteligentes com IA
     try:
         dt_anterior = data_ref - relativedelta(months=1)
         m_ant_str = f"{dt_anterior.month:02d}"
@@ -641,7 +657,7 @@ def get_dashboard():
         "contas": contas,
         "despesas_por_categoria": despesas_por_categoria,
         "historico_meses": historico_meses,
-        "evolucao_saldo": evolucao_saldo,
+        "top_despesas": top_despesas,
         "despesas_diarias": despesas_diarias,
         "alertas": alertas,
         "insights_ia": insights_ia
