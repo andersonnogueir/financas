@@ -529,14 +529,17 @@ def get_dashboard():
         })
 
     # 5. Gastos Diários do Mês (Linha do Tempo)
-    cursor.execute("""
-        SELECT CAST(strftime('%d', data) AS INTEGER) as dia, SUM(valor) as total
-        FROM transacoes
-        WHERE user_id = ? AND tipo = 'despesa' AND strftime('%m', data) = ? AND strftime('%Y', data) = ?
-        GROUP BY dia
-        ORDER BY dia ASC
-    """, (user_id, mes_str, ano_str))
-    despesas_diarias = [{"dia": int(row['dia']), "total": round(float(row['total']), 2)} for row in cursor.fetchall()]
+    try:
+        cursor.execute("""
+            SELECT CAST(strftime('%d', data) AS INTEGER) as dia, SUM(valor) as total
+            FROM transacoes
+            WHERE user_id = ? AND tipo = 'despesa' AND strftime('%m', data) = ? AND strftime('%Y', data) = ?
+            GROUP BY 1
+            ORDER BY 1 ASC
+        """, (user_id, mes_str, ano_str))
+        despesas_diarias = [{"dia": int(row['dia']), "total": round(float(row['total']), 2)} for row in cursor.fetchall()]
+    except Exception as e:
+        despesas_diarias = []
 
     # 6. Alertas: Contas a vencer nos próximos 7 dias ou vencidas
     hoje_str = hoje.strftime('%Y-%m-%d')
@@ -564,51 +567,62 @@ def get_dashboard():
             a['valor'] = float(a['valor'])
 
     # 7. Motor de Insights Financeiros Inteligentes com IA
-    dt_anterior = data_ref - relativedelta(months=1)
-    m_ant_str = f"{dt_anterior.month:02d}"
-    y_ant_str = str(dt_anterior.year)
-    cursor.execute("""
-        SELECT COALESCE(SUM(valor), 0) as total_ant
-        FROM transacoes
-        WHERE user_id = ? AND tipo = 'despesa' AND strftime('%m', data) = ? AND strftime('%Y', data) = ?
-    """, (user_id, m_ant_str, y_ant_str))
-    total_despesas_ant = float(cursor.fetchone()['total_ant'] or 0)
+    try:
+        dt_anterior = data_ref - relativedelta(months=1)
+        m_ant_str = f"{dt_anterior.month:02d}"
+        y_ant_str = str(dt_anterior.year)
+        cursor.execute("""
+            SELECT COALESCE(SUM(valor), 0) as total_ant
+            FROM transacoes
+            WHERE user_id = ? AND tipo = 'despesa' AND strftime('%m', data) = ? AND strftime('%Y', data) = ?
+        """, (user_id, m_ant_str, y_ant_str))
+        row_ant = cursor.fetchone()
+        total_despesas_ant = float(row_ant['total_ant'] or 0) if row_ant else 0.0
 
-    taxa_poupanca = round(((total_receitas - total_despesas) / total_receitas * 100), 1) if total_receitas > 0 else 0.0
+        taxa_poupanca = round(((total_receitas - total_despesas) / total_receitas * 100), 1) if total_receitas > 0 else 0.0
 
-    maior_cat = despesas_por_categoria[0] if despesas_por_categoria else None
-    diff_gastos_pct = round(((total_despesas - total_despesas_ant) / total_despesas_ant * 100), 1) if total_despesas_ant > 0 else 0.0
+        maior_cat = despesas_por_categoria[0] if despesas_por_categoria else None
+        diff_gastos_pct = round(((total_despesas - total_despesas_ant) / total_despesas_ant * 100), 1) if total_despesas_ant > 0 else 0.0
 
-    sugestoes_ia = []
-    if maior_cat and total_despesas > 0:
-        sugestoes_ia.append(f"Seu maior centro de custo é <b>{maior_cat['nome']}</b>, consumindo <b>{maior_cat['percentual']}%</b> (R$ {maior_cat['total']:.2f}) de todas as suas despesas.")
-    
-    if total_receitas > 0:
-        if taxa_poupanca >= 20:
-            sugestoes_ia.append(f"Parabéns! Sua taxa de poupança está em <b>{taxa_poupanca}%</b>, acima da meta recomendada de 20%.")
-        elif taxa_poupanca > 0:
-            sugestoes_ia.append(f"Você está economizando <b>{taxa_poupanca}%</b> da sua renda. Reduzir pequenos gastos em {maior_cat['nome'] if maior_cat else 'despesas variáveis'} pode acelerar sua reserva.")
+        sugestoes_ia = []
+        if maior_cat and total_despesas > 0:
+            sugestoes_ia.append(f"Seu maior centro de custo é <b>{maior_cat['nome']}</b>, consumindo <b>{maior_cat['percentual']}%</b> (R$ {maior_cat['total']:.2f}) de todas as suas despesas.")
+        
+        if total_receitas > 0:
+            if taxa_poupanca >= 20:
+                sugestoes_ia.append(f"Parabéns! Sua taxa de poupança está em <b>{taxa_poupanca}%</b>, acima da meta recomendada de 20%.")
+            elif taxa_poupanca > 0:
+                sugestoes_ia.append(f"Você está economizando <b>{taxa_poupanca}%</b> da sua renda. Reduzir pequenos gastos em {maior_cat['nome'] if maior_cat else 'despesas variáveis'} pode acelerar sua reserva.")
+            else:
+                sugestoes_ia.append(f"Atenção: suas despesas superaram as receitas em <b>R$ {abs(balanco_mes):.2f}</b> neste mês. Priorize pagamentos essenciais.")
+        elif total_despesas > 0:
+            sugestoes_ia.append("Nenhuma receita registrada até o momento neste mês. Não se esqueça de lançar seu salário ou recebimentos.")
         else:
-            sugestoes_ia.append(f"Atenção: suas despesas superaram as receitas em <b>R$ {abs(balanco_mes):.2f}</b> neste mês. Priorize pagamentos essenciais.")
-    elif total_despesas > 0:
-        sugestoes_ia.append("Nenhuma receita registrada até o momento neste mês. Não se esqueça de lançar seu salário ou recebimentos.")
-    else:
-        sugestoes_ia.append("Mês sem lançamentos ainda. Importe seu extrato (OFX/CSV) ou cadastre suas despesas para ver a análise completa.")
+            sugestoes_ia.append("Mês sem lançamentos ainda. Importe seu extrato (OFX/CSV) ou cadastre suas despesas para ver a análise completa.")
 
-    if total_despesas_ant > 0 and total_despesas > 0:
-        if diff_gastos_pct > 10:
-            sugestoes_ia.append(f"Seus gastos totais estão <b>+{diff_gastos_pct}%</b> maiores em relação ao mês anterior.")
-        elif diff_gastos_pct < -10:
-            sugestoes_ia.append(f"Ótimo controle! Seus gastos caíram <b>{abs(diff_gastos_pct)}%</b> comparado ao mês passado.")
+        if total_despesas_ant > 0 and total_despesas > 0:
+            if diff_gastos_pct > 10:
+                sugestoes_ia.append(f"Seus gastos totais estão <b>+{diff_gastos_pct}%</b> maiores em relação ao mês anterior.")
+            elif diff_gastos_pct < -10:
+                sugestoes_ia.append(f"Ótimo controle! Seus gastos caíram <b>{abs(diff_gastos_pct)}%</b> comparado ao mês passado.")
 
-    insights_ia = {
-        "maior_categoria": maior_cat,
-        "total_despesas_anterior": total_despesas_ant,
-        "diff_gastos_pct": diff_gastos_pct,
-        "taxa_poupanca": taxa_poupanca,
-        "status_saude": "excelente" if (total_receitas > 0 and taxa_poupanca >= 20) else ("estavel" if (total_receitas > 0 and taxa_poupanca >= 0) else ("alerta" if (total_receitas > 0 and total_despesas > total_receitas) else "neutro")),
-        "sugestoes": sugestoes_ia
-    }
+        insights_ia = {
+            "maior_categoria": maior_cat,
+            "total_despesas_anterior": total_despesas_ant,
+            "diff_gastos_pct": diff_gastos_pct,
+            "taxa_poupanca": taxa_poupanca,
+            "status_saude": "excelente" if (total_receitas > 0 and taxa_poupanca >= 20) else ("estavel" if (total_receitas > 0 and taxa_poupanca >= 0) else ("alerta" if (total_receitas > 0 and total_despesas > total_receitas) else "neutro")),
+            "sugestoes": sugestoes_ia
+        }
+    except Exception as e:
+        insights_ia = {
+            "maior_categoria": despesas_por_categoria[0] if despesas_por_categoria else None,
+            "total_despesas_anterior": 0.0,
+            "diff_gastos_pct": 0.0,
+            "taxa_poupanca": 0.0,
+            "status_saude": "neutro",
+            "sugestoes": ["Análise em tempo real disponível após cadastrar lançamentos."]
+        }
 
     conn.close()
 

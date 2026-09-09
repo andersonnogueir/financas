@@ -44,6 +44,8 @@ class PostgresCursorWrapper:
         # Converte funções de data strftime do SQLite para TO_CHAR do PostgreSQL (suporta aliases como t.data)
         sql_pg = re.sub(r"strftime\('%m',\s*([^)]+)\)", r"TO_CHAR(\1::date, 'MM')", sql, flags=re.IGNORECASE)
         sql_pg = re.sub(r"strftime\('%Y',\s*([^)]+)\)", r"TO_CHAR(\1::date, 'YYYY')", sql_pg, flags=re.IGNORECASE)
+        sql_pg = re.sub(r"strftime\('%d',\s*([^)]+)\)", r"TO_CHAR(\1::date, 'DD')", sql_pg, flags=re.IGNORECASE)
+        sql_pg = re.sub(r"strftime\('%Y-%m-%d',\s*([^)]+)\)", r"TO_CHAR(\1::date, 'YYYY-MM-DD')", sql_pg, flags=re.IGNORECASE)
 
         # Converte placeholders ? do SQLite para %s do PostgreSQL
         sql_pg = sql_pg.replace("?", "%s")
@@ -68,6 +70,8 @@ class PostgresCursorWrapper:
     def executemany(self, sql, seq_of_params):
         sql_pg = re.sub(r"strftime\('%m',\s*([^)]+)\)", r"TO_CHAR(\1::date, 'MM')", sql, flags=re.IGNORECASE)
         sql_pg = re.sub(r"strftime\('%Y',\s*([^)]+)\)", r"TO_CHAR(\1::date, 'YYYY')", sql_pg, flags=re.IGNORECASE)
+        sql_pg = re.sub(r"strftime\('%d',\s*([^)]+)\)", r"TO_CHAR(\1::date, 'DD')", sql_pg, flags=re.IGNORECASE)
+        sql_pg = re.sub(r"strftime\('%Y-%m-%d',\s*([^)]+)\)", r"TO_CHAR(\1::date, 'YYYY-MM-DD')", sql_pg, flags=re.IGNORECASE)
         sql_pg = sql_pg.replace("?", "%s")
         self.cur.executemany(sql_pg, seq_of_params)
         return self
