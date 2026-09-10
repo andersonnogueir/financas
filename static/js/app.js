@@ -106,6 +106,16 @@ async function checkAuth() {
 
     updateSubscriptionUI(state.user);
 
+    // Verificar se é o primeiro acesso para exibir o Guia Interativo de Boas-Vindas
+    if (state.user && state.user.id) {
+      const tourSeen = localStorage.getItem(`finflow_tour_seen_${state.user.id}`);
+      if (!tourSeen) {
+        setTimeout(() => {
+          openTourModal(1);
+        }, 700);
+      }
+    }
+
     return true;
   } catch (err) {
     window.location.href = '/login';
@@ -2747,3 +2757,152 @@ async function adminDeleteClient(userId, userName = 'este cliente') {
   }
 }
 window.adminDeleteClient = adminDeleteClient;
+
+// ========================================================
+// GUIA INTERATIVO DAS FUNCIONALIDADES (TOUR DE ONBOARDING)
+// ========================================================
+
+state.currentTourStep = 1;
+const TOTAL_TOUR_STEPS = 6;
+
+function openTourModal(step = 1) {
+  state.currentTourStep = step;
+  updateTourUI();
+  openModal('modal-onboarding-tour');
+}
+window.openTourModal = openTourModal;
+
+function closeTourModal() {
+  if (state.user && state.user.id) {
+    localStorage.setItem(`finflow_tour_seen_${state.user.id}`, 'true');
+  }
+  closeModal('modal-onboarding-tour');
+}
+window.closeTourModal = closeTourModal;
+
+function nextTourStep() {
+  if (state.currentTourStep < TOTAL_TOUR_STEPS) {
+    state.currentTourStep++;
+    updateTourUI();
+  } else {
+    finishTourAndGoToDashboard();
+  }
+}
+window.nextTourStep = nextTourStep;
+
+function prevTourStep() {
+  if (state.currentTourStep > 1) {
+    state.currentTourStep--;
+    updateTourUI();
+  }
+}
+window.prevTourStep = prevTourStep;
+
+function jumpToTourStep(step) {
+  if (step >= 1 && step <= TOTAL_TOUR_STEPS) {
+    state.currentTourStep = step;
+    updateTourUI();
+  }
+}
+window.jumpToTourStep = jumpToTourStep;
+
+function updateTourUI() {
+  const step = state.currentTourStep;
+  
+  // Atualizar contador e barra de progresso
+  const stepCurrentEl = document.getElementById('tour-step-current');
+  const progressBarEl = document.getElementById('tour-progress-bar');
+  if (stepCurrentEl) stepCurrentEl.textContent = step;
+  if (progressBarEl) {
+    const pct = (step / TOTAL_TOUR_STEPS) * 100;
+    progressBarEl.style.width = `${pct}%`;
+  }
+
+  // Alternar slides
+  document.querySelectorAll('.tour-slide').forEach(slide => {
+    const slideNum = parseInt(slide.getAttribute('data-slide'));
+    if (slideNum === step) {
+      slide.classList.remove('hidden');
+      slide.classList.add('fade-in');
+    } else {
+      slide.classList.add('hidden');
+      slide.classList.remove('fade-in');
+    }
+  });
+
+  // Atualizar dots
+  document.querySelectorAll('.tour-dot').forEach((dot, idx) => {
+    if (idx + 1 === step) {
+      dot.className = 'tour-dot w-4 h-2 rounded-full bg-indigo-600 transition-all';
+    } else {
+      dot.className = 'tour-dot w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-700 hover:bg-indigo-400 transition-all cursor-pointer';
+    }
+  });
+
+  // Botão Voltar
+  const btnPrev = document.getElementById('btn-tour-prev');
+  if (btnPrev) {
+    if (step === 1) {
+      btnPrev.disabled = true;
+      btnPrev.className = 'px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-300 dark:text-slate-600 cursor-not-allowed transition flex items-center gap-1';
+    } else {
+      btnPrev.disabled = false;
+      btnPrev.className = 'px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-1 cursor-pointer';
+    }
+  }
+
+  // Botão Próximo / Concluir
+  const btnNext = document.getElementById('btn-tour-next');
+  if (btnNext) {
+    if (step === TOTAL_TOUR_STEPS) {
+      btnNext.innerHTML = '<span>Começar a Usar</span> <i data-lucide="sparkles" class="w-4 h-4"></i>';
+      btnNext.className = 'px-5 py-2 text-xs font-extrabold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-90 rounded-xl shadow-md transition flex items-center gap-1.5';
+    } else {
+      btnNext.innerHTML = '<span>Próximo Passo</span> <i data-lucide="chevron-right" class="w-4 h-4"></i>';
+      btnNext.className = 'px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5';
+    }
+  }
+
+  lucide.createIcons();
+}
+
+function tourAction(action) {
+  closeTourModal();
+
+  setTimeout(() => {
+    if (action === 'nova-conta') {
+      document.getElementById('btn-quick-new-account')?.click();
+    } else if (action === 'importar') {
+      document.getElementById('btn-open-modal-import')?.click();
+    } else if (action === 'novo-lancamento') {
+      document.getElementById('btn-open-modal-lancamento')?.click();
+    } else if (action === 'tab-recorrencias') {
+      const tabRec = document.querySelector('.nav-tab[data-tab="recorrencias"]');
+      if (tabRec) tabRec.click();
+    } else if (action === 'tab-categorias') {
+      const tabCat = document.querySelector('.nav-tab[data-tab="categorias"]');
+      if (tabCat) tabCat.click();
+    } else if (action === 'dashboard') {
+      const tabDash = document.querySelector('.nav-tab[data-tab="dashboard"]');
+      if (tabDash) tabDash.click();
+    }
+  }, 200);
+}
+window.tourAction = tourAction;
+
+function finishTourAndGoToDashboard() {
+  closeTourModal();
+  const tabDash = document.querySelector('.nav-tab[data-tab="dashboard"]');
+  if (tabDash) tabDash.click();
+
+  Swal.fire({
+    icon: 'success',
+    title: 'Tudo pronto para você decolar!',
+    html: `
+      <p class="text-sm text-slate-600 dark:text-slate-300">Você pode rever este guia a qualquer momento clicando no botão <b>Guia do Sistema</b> no topo da tela.</p>
+    `,
+    confirmButtonColor: '#4f46e5',
+    confirmButtonText: 'Vamos lá!'
+  });
+}
+window.finishTourAndGoToDashboard = finishTourAndGoToDashboard;
