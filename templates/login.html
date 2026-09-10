@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Entrar | FinFlow - Gestão Financeira Pessoal</title>
+  <title>Planos & Preços | FinFlow - Gestão Financeira Inteligente</title>
   
   <!-- PWA & Mobile Meta Tags -->
   <link rel="manifest" href="/static/manifest.json">
@@ -37,7 +37,7 @@
   <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -51,45 +51,245 @@
   <!-- Custom CSS -->
   <link rel="stylesheet" href="/static/css/styles.css">
 </head>
-<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col justify-between font-sans selection:bg-indigo-500 selection:text-white transition-colors duration-200 relative overflow-x-hidden">
+<body class="bg-slate-50 dark:bg-[#070b14] text-slate-800 dark:text-slate-100 min-h-screen flex flex-col justify-between font-sans selection:bg-indigo-500 selection:text-white transition-colors duration-200 relative overflow-x-hidden">
 
-  <!-- Glow de fundo sutil -->
-  <div class="absolute -top-40 left-1/2 -translate-x-1/2 w-[600px] h-[350px] bg-indigo-500/10 dark:bg-indigo-600/15 blur-[120px] pointer-events-none rounded-full"></div>
+  <!-- Glows de fundo modernos e imersivos -->
+  <div class="absolute -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[450px] bg-indigo-600/15 dark:bg-indigo-600/20 blur-[150px] pointer-events-none rounded-full"></div>
+  <div class="absolute top-[40%] -left-40 w-[400px] h-[400px] bg-purple-600/10 dark:bg-purple-600/15 blur-[140px] pointer-events-none rounded-full"></div>
+  <div class="absolute top-[60%] -right-40 w-[400px] h-[400px] bg-pink-600/10 dark:bg-pink-600/15 blur-[140px] pointer-events-none rounded-full"></div>
 
-  <!-- Header Superior -->
-  <header class="max-w-7xl w-full mx-auto px-6 py-5 flex items-center justify-between relative z-10">
-    <div class="flex items-center gap-3">
-      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+  <!-- HEADER PRINCIPAL COM LOGO & BOTÕES DE ACESSO -->
+  <header class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 flex items-center justify-between relative z-20">
+    <!-- Logo e Marca -->
+    <a href="/" class="flex items-center gap-3 group">
+      <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition transform">
         <i data-lucide="wallet-cards" class="w-5 h-5"></i>
       </div>
       <div>
-        <h1 class="text-lg font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-          FinFlow <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-semibold border border-indigo-200 dark:border-indigo-700/40">PRO</span>
+        <h1 class="text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+          FinFlow <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-semibold border border-indigo-200 dark:border-indigo-700/40">PRO</span>
         </h1>
-        <p class="text-xs text-slate-500 dark:text-slate-400">Controle Financeiro Pessoal</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium hidden sm:block">Controle Financeiro Inteligente & IA</p>
+      </div>
+    </a>
+
+    <!-- Ações do Topo: Alternar Tema + Botões Entrar / Cadastrar -->
+    <div class="flex items-center gap-2 sm:gap-3">
+      <!-- Botão Tema -->
+      <button id="btn-theme-login" title="Alternar tema claro/escuro" class="p-2 sm:p-2.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-white/80 dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-sm transition">
+        <i id="theme-login-icon" data-lucide="sun" class="w-4 h-4 sm:w-5 sm:h-5"></i>
+      </button>
+
+      <!-- Botão Entrar -->
+      <button onclick="openAuthModal('login')" class="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-white bg-white/80 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition shadow-sm flex items-center gap-1.5">
+        <i data-lucide="log-in" class="w-4 h-4"></i>
+        <span>Entrar</span>
+      </button>
+
+      <!-- Botão Criar Conta / Cadastrar (Destaque) -->
+      <button onclick="openAuthModal('register')" class="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 shadow-lg shadow-indigo-600/30 transition transform hover:-translate-y-0.5 flex items-center gap-1.5">
+        <i data-lucide="user-plus" class="w-4 h-4"></i>
+        <span class="hidden sm:inline">Criar Conta Grátis</span>
+        <span class="sm:hidden">Cadastrar</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- CONTEÚDO PRINCIPAL: FOCO ABSOLUTO EM HERO & PRECIFICAÇÃO (SAAS PRICING) -->
+  <main class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 relative z-10 flex flex-col justify-center">
+    
+    <!-- Hero / Cabeçalho da Precificação -->
+    <div class="text-center max-w-3xl mx-auto space-y-4 mb-10 sm:mb-12">
+      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 text-xs font-bold uppercase tracking-wider shadow-sm">
+        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+        <span>Planos & Preços Transparentes</span>
+      </div>
+
+      <h2 class="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 dark:text-white tracking-tight leading-tight">
+        Escolha o plano ideal para suas finanças
+      </h2>
+
+      <p class="text-sm sm:text-base text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed">
+        Automatize seus extratos bancários (OFX/CSV) com Inteligência Artificial e organize seus gastos com precisão. Comece com <b>7 dias grátis de PRO</b>!
+      </p>
+
+      <!-- Seletor Mensal / Anual (Toggle com Desconto) -->
+      <div class="pt-2 flex justify-center">
+        <div class="inline-flex items-center bg-slate-200/90 dark:bg-slate-900 p-1.5 rounded-2xl border border-slate-300/80 dark:border-slate-800 shadow-inner">
+          <button id="toggle-pricing-mensal" type="button" class="px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition text-slate-600 dark:text-slate-400" onclick="setBillingCycle('mensal')">
+            Mensal
+          </button>
+          <button id="toggle-pricing-anual" type="button" class="px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-600/30 flex items-center gap-2" onclick="setBillingCycle('anual')">
+            <span>Anual</span>
+            <span class="text-[10px] bg-emerald-500 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-wider">Economize 45%</span>
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- Alternar Tema (Modo Claro / Modo Escuro) -->
-    <button id="btn-theme-login" title="Alternar tema claro/escuro" class="p-2.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-white/80 dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 shadow-sm transition">
-      <i id="theme-login-icon" data-lucide="sun" class="w-5 h-5"></i>
-    </button>
-  </header>
+    <!-- GRID DOS 3 CARDS DE PLANOS EM DESTAQUE -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-stretch">
+      
+      <!-- CARD 1: FREEMIUM (GRATUITO) -->
+      <div class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-7 flex flex-col justify-between shadow-sm hover:shadow-xl hover:border-slate-300 dark:hover:border-slate-700 transition duration-300">
+        <div>
+          <div class="flex items-center justify-between">
+            <h3 class="text-xl font-bold text-slate-900 dark:text-white">Freemium</h3>
+            <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Gratuito</span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Para quem quer dar os primeiros passos.</p>
+          
+          <div class="mt-5 mb-6 pb-6 border-b border-slate-100 dark:border-slate-800">
+            <div class="flex items-baseline gap-1">
+              <span class="text-4xl font-black text-slate-900 dark:text-white">R$ 0</span>
+              <span class="text-xs text-slate-500 dark:text-slate-400">/mês</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">Sem necessidade de cartão de crédito</p>
+          </div>
 
-  <!-- Card Central de Login / Cadastro -->
-  <main class="flex-1 flex items-center justify-center px-4 py-8 relative z-10">
-    <div class="w-full max-w-md bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl dark:shadow-2xl dark:shadow-indigo-950/40 backdrop-blur-xl relative overflow-hidden transition-colors duration-200">
+          <ul class="space-y-3 text-xs text-slate-600 dark:text-slate-300">
+            <li class="flex items-center gap-2.5"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Até 2 contas bancárias</li>
+            <li class="flex items-center gap-2.5"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Até 25 lançamentos / mês</li>
+            <li class="flex items-center gap-2.5"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Categorização de despesas padrão</li>
+            <li class="flex items-center gap-2.5"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Dashboard do mês atual</li>
+            <li class="flex items-center gap-2.5 text-slate-400 dark:text-slate-600"><i data-lucide="x" class="w-4 h-4 shrink-0"></i> Exportação em CSV/Excel</li>
+            <li class="flex items-center gap-2.5 text-slate-400 dark:text-slate-600"><i data-lucide="x" class="w-4 h-4 shrink-0"></i> Importação inteligente OFX com IA</li>
+          </ul>
+        </div>
+
+        <button onclick="openAuthModal('register')" class="mt-8 w-full py-3 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs sm:text-sm font-bold transition">
+          Começar Grátis
+        </button>
+      </div>
+
+      <!-- CARD 2: STARTER / MVP -->
+      <div class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-indigo-200 dark:border-indigo-900/60 rounded-3xl p-6 sm:p-7 flex flex-col justify-between shadow-md hover:shadow-xl hover:border-indigo-400 dark:hover:border-indigo-700 transition duration-300">
+        <div>
+          <div class="flex items-center justify-between">
+            <h3 class="text-xl font-bold text-slate-900 dark:text-white">Starter (MVP)</h3>
+            <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">Planilhas Turbo</span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Substituto definitivo de planilhas manuais.</p>
+          
+          <div class="mt-5 mb-6 pb-6 border-b border-slate-100 dark:border-slate-800">
+            <div class="flex items-baseline gap-1">
+              <span id="price-starter-val" class="text-4xl font-black text-slate-900 dark:text-white">R$ 99,00</span>
+              <span id="price-starter-unit" class="text-xs text-slate-500 dark:text-slate-400 font-semibold">/ano</span>
+            </div>
+            <p id="price-starter-sub" class="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-1">Equivalente a R$ 8,25/mês (45% OFF)</p>
+          </div>
+
+          <ul class="space-y-3 text-xs text-slate-600 dark:text-slate-300">
+            <li class="flex items-center gap-2.5"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Até 10 contas bancárias</li>
+            <li class="flex items-center gap-2.5"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> <b>Lançamentos ilimitados</b></li>
+            <li class="flex items-center gap-2.5"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> <b>Exportação completa em CSV/Excel</b></li>
+            <li class="flex items-center gap-2.5"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Dashboards completos e histórico</li>
+            <li class="flex items-center gap-2.5"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Recorrências e alertas de contas</li>
+            <li class="flex items-center gap-2.5 text-slate-400 dark:text-slate-600"><i data-lucide="x" class="w-4 h-4 shrink-0"></i> Importação inteligente OFX com IA</li>
+          </ul>
+        </div>
+
+        <button onclick="openAuthModal('register')" class="mt-8 w-full py-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs sm:text-sm font-bold transition">
+          Escolher Starter
+        </button>
+      </div>
+
+      <!-- CARD 3: PADRÃO PRO (DESTAQUE / MAIS POPULAR) -->
+      <div class="bg-gradient-to-b from-indigo-950/70 via-slate-900 to-slate-900 border-2 border-indigo-500 rounded-3xl p-6 sm:p-7 flex flex-col justify-between shadow-2xl shadow-indigo-950/60 relative overflow-hidden transform md:-translate-y-2 hover:border-indigo-400 transition duration-300">
+        <!-- Tag Mais Escolhido -->
+        <div class="absolute top-0 right-0 bg-indigo-600 text-white text-[10px] font-black uppercase px-3.5 py-1 rounded-bl-2xl tracking-wider shadow-sm">
+          Mais Escolhido
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between">
+            <h3 class="text-xl font-bold text-white flex items-center gap-1.5">
+              <i data-lucide="sparkles" class="w-5 h-5 text-amber-400"></i>
+              Padrão PRO
+            </h3>
+            <span class="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">7 Dias Grátis</span>
+          </div>
+          <p class="text-xs text-indigo-200/80 mt-1">Automação total com IA e importação bancária.</p>
+          
+          <div class="mt-5 mb-6 pb-6 border-b border-white/10">
+            <div class="flex items-baseline gap-1">
+              <span id="price-pro-val" class="text-4xl font-black text-white">R$ 199,00</span>
+              <span id="price-pro-unit" class="text-xs text-indigo-200 font-semibold">/ano</span>
+            </div>
+            <p id="price-pro-sub" class="text-[11px] text-amber-300 font-bold mt-1">Equivalente a R$ 16,58/mês (45% OFF)</p>
+          </div>
+
+          <ul class="space-y-3 text-xs text-slate-200">
+            <li class="flex items-center gap-2.5"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> <b>Tudo do plano Starter</b></li>
+            <li class="flex items-center gap-2.5"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> <b>Contas bancárias ilimitadas</b></li>
+            <li class="flex items-center gap-2.5"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> <b>Importação Inteligente de Extratos (OFX/CSV)</b></li>
+            <li class="flex items-center gap-2.5"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> <b>Auto-Categorização com IA e Memória</b></li>
+            <li class="flex items-center gap-2.5"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> <b>Assistente de Saúde Financeira & Poupança</b></li>
+            <li class="flex items-center gap-2.5"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> Suporte prioritário</li>
+          </ul>
+        </div>
+
+        <button onclick="openAuthModal('register')" class="mt-8 w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold shadow-lg shadow-indigo-600/40 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2">
+          <span>Iniciar 7 Dias Grátis</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Barra de Confiança e Segurança -->
+    <div class="mt-12 text-center text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center justify-center gap-6">
+      <span class="flex items-center gap-1.5"><i data-lucide="shield-check" class="w-4 h-4 text-emerald-500"></i> Pagamento Seguro via Stripe / Asaas</span>
+      <span class="flex items-center gap-1.5"><i data-lucide="credit-card" class="w-4 h-4 text-indigo-500"></i> Cartão de Crédito e Pix Instantâneo</span>
+      <span class="flex items-center gap-1.5"><i data-lucide="lock" class="w-4 h-4 text-amber-500"></i> Cancele quando quiser</span>
+    </div>
+
+  </main>
+
+  <!-- RODAPÉ DA PÁGINA -->
+  <footer class="py-6 text-center text-xs text-slate-500 dark:text-slate-400 relative z-10 border-t border-slate-200 dark:border-slate-800/80">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div>FinFlow &bull; Sistema de Gestão Financeira Pessoal Inteligente</div>
+      <div class="flex items-center gap-4 text-[11px]">
+        <a href="javascript:void(0)" onclick="openAuthModal('login')" class="hover:underline">Acessar Conta</a>
+        <span>&bull;</span>
+        <a href="javascript:void(0)" onclick="openAuthModal('register')" class="hover:underline">Criar Nova Conta</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ======================================================== -->
+  <!-- MODAL FLUTUANTE DE AUTENTICAÇÃO (LOGIN / CADASTRO) -->
+  <!-- ======================================================== -->
+  <div id="modal-auth" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md hidden transition-all duration-300">
+    <div class="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden transform transition-all">
       
       <!-- Detalhe decorativo no topo -->
       <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
 
+      <!-- Botão Fechar Modal -->
+      <button onclick="closeAuthModal()" class="absolute top-5 right-5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <!-- Cabeçalho do Modal -->
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+          <i data-lucide="wallet-cards" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 id="modal-auth-title" class="text-base font-bold text-slate-900 dark:text-white">Bem-vindo(a) ao FinFlow</h3>
+          <p id="modal-auth-subtitle" class="text-xs text-slate-500 dark:text-slate-400">Acesse sua conta ou cadastre-se grátis</p>
+        </div>
+      </div>
+
       <!-- Abas de Alternância: Entrar vs Cadastrar -->
-      <div class="grid grid-cols-2 gap-1 bg-slate-100 dark:bg-slate-950/80 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800/80 mb-6">
-        <button id="tab-btn-login" class="py-2.5 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-md shadow-indigo-600/30">
+      <div class="grid grid-cols-2 gap-1 bg-slate-100 dark:bg-slate-950/80 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800/80 mb-5">
+        <button id="tab-btn-login" class="py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-md shadow-indigo-600/30">
           <i data-lucide="log-in" class="w-4 h-4"></i>
           <span>Entrar</span>
         </button>
-        <button id="tab-btn-register" class="py-2.5 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200">
+        <button id="tab-btn-register" class="py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200">
           <i data-lucide="user-plus" class="w-4 h-4"></i>
           <span>Criar Conta</span>
         </button>
@@ -97,11 +297,8 @@
 
       <!-- BOTÃO GOOGLE SIGN-IN EM DESTAQUE -->
       <div class="space-y-4">
-        
-        <!-- Botão customizado ou gatilho Google -->
-        <button id="btn-google-login" type="button" class="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-2xl bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 text-sm font-semibold transition shadow-sm hover:shadow border border-slate-200 dark:border-slate-700 transform hover:-translate-y-0.5 active:translate-y-0">
-          <!-- Ícone oficial do Google SVG -->
-          <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+        <button id="btn-google-login" type="button" class="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-2xl bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 text-xs sm:text-sm font-semibold transition shadow-sm hover:shadow border border-slate-200 dark:border-slate-700 transform hover:-translate-y-0.5 active:translate-y-0">
+          <svg class="w-4 h-4 sm:w-5 sm:h-5 shrink-0" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
@@ -110,10 +307,9 @@
           <span class="whitespace-nowrap">Continuar com Google / Gmail</span>
         </button>
 
-        <!-- Divisor corrigido sem quebra de linha -->
-        <div class="relative flex items-center justify-center my-5">
+        <div class="relative flex items-center justify-center my-4">
           <div class="border-t border-slate-200 dark:border-slate-800 flex-1"></div>
-          <span class="px-3 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0 whitespace-nowrap select-none">
+          <span class="px-3 text-[10px] sm:text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0 whitespace-nowrap select-none">
             ou com seu e-mail
           </span>
           <div class="border-t border-slate-200 dark:border-slate-800 flex-1"></div>
@@ -121,218 +317,106 @@
       </div>
 
       <!-- FORMULÁRIO 1: LOGIN -->
-      <form id="form-login" class="mt-2 space-y-4">
+      <form id="form-login" class="mt-2 space-y-3.5">
         <div>
-          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">E-mail</label>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">E-mail</label>
           <div class="relative">
             <i data-lucide="mail" class="w-4 h-4 absolute left-3.5 top-3 text-slate-400"></i>
-            <input type="email" id="login-email" required placeholder="seuemail@exemplo.com" class="w-full pl-10 pr-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none focus:bg-white dark:focus:bg-slate-950 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition">
+            <input type="email" id="login-email" required placeholder="seuemail@exemplo.com" class="w-full pl-10 pr-3 py-2 text-sm bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white transition">
           </div>
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Senha</label>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Senha</label>
           <div class="relative">
             <i data-lucide="lock" class="w-4 h-4 absolute left-3.5 top-3 text-slate-400"></i>
-            <input type="password" id="login-senha" required placeholder="••••••••" class="w-full pl-10 pr-10 py-2.5 text-sm bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none focus:bg-white dark:focus:bg-slate-950 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition">
-            <button type="button" class="btn-toggle-password absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition">
+            <input type="password" id="login-senha" required placeholder="••••••••" class="w-full pl-10 pr-10 py-2 text-sm bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white transition">
+            <button type="button" class="btn-toggle-password absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition">
               <i data-lucide="eye" class="w-4 h-4"></i>
             </button>
           </div>
         </div>
 
-        <button type="submit" class="w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 shadow-lg shadow-indigo-600/30 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2">
+        <button type="submit" class="w-full py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 shadow-lg shadow-indigo-600/30 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2">
           <span>Entrar no FinFlow</span>
           <i data-lucide="arrow-right" class="w-4 h-4"></i>
         </button>
       </form>
 
       <!-- FORMULÁRIO 2: CADASTRO -->
-      <form id="form-register" class="mt-2 space-y-4 hidden">
+      <form id="form-register" class="mt-2 space-y-3.5 hidden">
         <div>
-          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Nome Completo</label>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Nome Completo</label>
           <div class="relative">
             <i data-lucide="user" class="w-4 h-4 absolute left-3.5 top-3 text-slate-400"></i>
-            <input type="text" id="reg-nome" required placeholder="Como deseja ser chamado(a)" class="w-full pl-10 pr-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none focus:bg-white dark:focus:bg-slate-950 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition">
+            <input type="text" id="reg-nome" required placeholder="Como deseja ser chamado(a)" class="w-full pl-10 pr-3 py-2 text-sm bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white transition">
           </div>
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">E-mail</label>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">E-mail</label>
           <div class="relative">
             <i data-lucide="mail" class="w-4 h-4 absolute left-3.5 top-3 text-slate-400"></i>
-            <input type="email" id="reg-email" required placeholder="seuemail@exemplo.com" class="w-full pl-10 pr-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none focus:bg-white dark:focus:bg-slate-950 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition">
+            <input type="email" id="reg-email" required placeholder="seuemail@exemplo.com" class="w-full pl-10 pr-3 py-2 text-sm bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white transition">
           </div>
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Senha (mínimo 6 caracteres)</label>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Senha (mínimo 6 caracteres)</label>
           <div class="relative">
             <i data-lucide="lock" class="w-4 h-4 absolute left-3.5 top-3 text-slate-400"></i>
-            <input type="password" id="reg-senha" required minlength="6" placeholder="Crie uma senha forte" class="w-full pl-10 pr-10 py-2.5 text-sm bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none focus:bg-white dark:focus:bg-slate-950 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition">
-            <button type="button" class="btn-toggle-password absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition">
+            <input type="password" id="reg-senha" required minlength="6" placeholder="Crie uma senha forte" class="w-full pl-10 pr-10 py-2 text-sm bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white transition">
+            <button type="button" class="btn-toggle-password absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition">
               <i data-lucide="eye" class="w-4 h-4"></i>
             </button>
           </div>
         </div>
 
-        <button type="submit" class="w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 shadow-lg shadow-indigo-600/30 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2">
+        <button type="submit" class="w-full py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 shadow-lg shadow-indigo-600/30 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2">
           <span>Criar Minha Conta Grátis</span>
           <i data-lucide="check" class="w-4 h-4"></i>
         </button>
       </form>
 
-      <div class="mt-6 text-center text-[11px] text-slate-500 dark:text-slate-400">
-        Seus dados financeiros são salvos localmente e protegidos de ponta a ponta.
+      <div class="mt-4 text-center text-[10px] text-slate-400">
+        Seus dados financeiros são salvos e protegidos de ponta a ponta.
       </div>
 
     </div>
-  </main>
+  </div>
 
-  <!-- SEÇÃO MODERNA DE PREÇOS & PLANOS SAAS -->
-  <section class="max-w-6xl w-full mx-auto px-4 py-12 relative z-10" id="pricing-section">
-    <div class="text-center max-w-2xl mx-auto mb-10">
-      <span class="px-3 py-1 text-xs font-bold rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
-        Planos & Preços Transparentes
-      </span>
-      <h2 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-3 tracking-tight">
-        Escolha o plano ideal para suas finanças
-      </h2>
-      <p class="text-sm text-slate-600 dark:text-slate-400 mt-2">
-        Comece com <b>7 dias grátis de PRO</b>. Sem cobrança imediata e cancele quando quiser.
-      </p>
-
-      <!-- Toggle Mensal / Anual -->
-      <div class="mt-6 inline-flex items-center bg-slate-200/80 dark:bg-slate-900 p-1.5 rounded-2xl border border-slate-300/80 dark:border-slate-800 shadow-inner">
-        <button id="toggle-pricing-mensal" type="button" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition text-slate-600 dark:text-slate-400" onclick="setBillingCycle('mensal')">
-          Mensal
-        </button>
-        <button id="toggle-pricing-anual" type="button" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-600/30 flex items-center gap-1.5" onclick="setBillingCycle('anual')">
-          <span>Anual</span>
-          <span class="text-[10px] bg-emerald-500 text-white px-2 py-0.5 rounded-full font-black uppercase">Economize 45%</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Grid de Planos -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
-      
-      <!-- Card 1: Freemium (Grátis) -->
-      <div class="bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition">
-        <div>
-          <div class="flex items-center justify-between">
-            <h3 class="text-lg font-bold text-slate-900 dark:text-white">Freemium</h3>
-            <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Gratuito</span>
-          </div>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Para testes e uso inicial simples.</p>
-          
-          <div class="mt-4 mb-6">
-            <div class="flex items-baseline gap-1">
-              <span class="text-3xl font-black text-slate-900 dark:text-white">R$ 0</span>
-              <span class="text-xs text-slate-500 dark:text-slate-400">/mês</span>
-            </div>
-            <p class="text-[11px] text-slate-400 mt-0.5">Sem cartão de crédito necessário</p>
-          </div>
-
-          <ul class="space-y-2.5 text-xs text-slate-600 dark:text-slate-300">
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Até 2 contas bancárias</li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Até 25 lançamentos / mês</li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Categorização padrão</li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Dashboard do mês atual</li>
-            <li class="flex items-center gap-2 text-slate-400 dark:text-slate-600"><i data-lucide="x" class="w-4 h-4 shrink-0"></i> Exportação em CSV/Excel</li>
-            <li class="flex items-center gap-2 text-slate-400 dark:text-slate-600"><i data-lucide="x" class="w-4 h-4 shrink-0"></i> Importação inteligente OFX/CSV</li>
-          </ul>
-        </div>
-
-        <button onclick="document.getElementById('tab-btn-register').click(); window.scrollTo({top: 0, behavior: 'smooth'});" class="mt-6 w-full py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold transition">
-          Começar Grátis
-        </button>
-      </div>
-
-      <!-- Card 2: Starter / MVP -->
-      <div class="bg-white/80 dark:bg-slate-900/80 border border-indigo-200 dark:border-indigo-900/60 rounded-3xl p-6 flex flex-col justify-between shadow-md hover:shadow-lg transition">
-        <div>
-          <div class="flex items-center justify-between">
-            <h3 class="text-lg font-bold text-slate-900 dark:text-white">Starter (MVP)</h3>
-            <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">Planilhas Turbo</span>
-          </div>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Substituto definitivo de planilhas manuais.</p>
-          
-          <div class="mt-4 mb-6">
-            <div class="flex items-baseline gap-1">
-              <span id="price-starter-val" class="text-3xl font-black text-slate-900 dark:text-white">R$ 99,00</span>
-              <span id="price-starter-unit" class="text-xs text-slate-500 dark:text-slate-400">/ano</span>
-            </div>
-            <p id="price-starter-sub" class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">Equivalente a R$ 8,25/mês (45% OFF)</p>
-          </div>
-
-          <ul class="space-y-2.5 text-xs text-slate-600 dark:text-slate-300">
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Até 10 contas bancárias</li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> <b>Lançamentos ilimitados</b></li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> <b>Exportação completa em CSV/Excel</b></li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Dashboards completos e histórico</li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Recorrências e alertas de contas</li>
-            <li class="flex items-center gap-2 text-slate-400 dark:text-slate-600"><i data-lucide="x" class="w-4 h-4 shrink-0"></i> Importação inteligente OFX com IA</li>
-          </ul>
-        </div>
-
-        <button onclick="document.getElementById('tab-btn-register').click(); window.scrollTo({top: 0, behavior: 'smooth'});" class="mt-6 w-full py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold transition">
-          Escolher Starter
-        </button>
-      </div>
-
-      <!-- Card 3: Padrão PRO (Mais Popular) -->
-      <div class="bg-gradient-to-b from-indigo-900/40 via-slate-900 to-slate-900 border-2 border-indigo-500 rounded-3xl p-6 flex flex-col justify-between shadow-xl shadow-indigo-950/50 relative overflow-hidden transform md:-translate-y-2">
-        <div class="absolute top-0 right-0 bg-indigo-600 text-white text-[10px] font-black uppercase px-3 py-1 rounded-bl-xl tracking-wider">
-          Mais Escolhido
-        </div>
-        <div>
-          <div class="flex items-center justify-between">
-            <h3 class="text-lg font-bold text-white flex items-center gap-1.5">
-              <i data-lucide="sparkles" class="w-4 h-4 text-amber-400"></i>
-              Padrão PRO
-            </h3>
-            <span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">7 Dias Grátis</span>
-          </div>
-          <p class="text-xs text-indigo-200/80 mt-1">Automação total com IA e importação bancária.</p>
-          
-          <div class="mt-4 mb-6">
-            <div class="flex items-baseline gap-1">
-              <span id="price-pro-val" class="text-3xl font-black text-white">R$ 199,00</span>
-              <span id="price-pro-unit" class="text-xs text-indigo-200">/ano</span>
-            </div>
-            <p id="price-pro-sub" class="text-[11px] text-amber-300 font-semibold mt-0.5">Equivalente a R$ 16,58/mês (45% OFF)</p>
-          </div>
-
-          <ul class="space-y-2.5 text-xs text-slate-200">
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> <b>Tudo do plano Starter</b></li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> <b>Contas bancárias ilimitadas</b></li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> <b>Importação Inteligente de Extratos (OFX/CSV)</b></li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> <b>Auto-Categorização com IA e Memória</b></li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> <b>Assistente de Saúde Financeira & Poupança</b></li>
-            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> Suporte prioritário</li>
-          </ul>
-        </div>
-
-        <button onclick="document.getElementById('tab-btn-register').click(); window.scrollTo({top: 0, behavior: 'smooth'});" class="mt-6 w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/40 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2">
-          <span>Iniciar 7 Dias Grátis</span>
-          <i data-lucide="arrow-right" class="w-4 h-4"></i>
-        </button>
-      </div>
-
-    </div>
-  </section>
-
-  <!-- Rodapé -->
-  <footer class="py-6 text-center text-xs text-slate-500 dark:text-slate-400 relative z-10 border-t border-slate-200 dark:border-slate-800/80">
-    FinFlow &bull; Sistema de Gestão Financeira Pessoal Inteligente
-  </footer>
-
-  <!-- Script de Login / Cadastro -->
+  <!-- SCRIPT DE INTERAÇÃO & AUTENTICAÇÃO -->
   <script>
-    // Configuração do Google Client ID (injetada pelo Flask ou via API)
     const GOOGLE_CLIENT_ID = "{{ google_client_id | default('') }}";
 
+    // Controle do Modal de Autenticação
+    function openAuthModal(initialTab = 'login') {
+      const modal = document.getElementById('modal-auth');
+      if (modal) modal.classList.remove('hidden');
+
+      if (initialTab === 'register') {
+        document.getElementById('tab-btn-register')?.click();
+      } else {
+        document.getElementById('tab-btn-login')?.click();
+      }
+      lucide.createIcons();
+    }
+
+    function closeAuthModal() {
+      const modal = document.getElementById('modal-auth');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    // Fechar ao clicar fora ou tecla Escape
+    document.getElementById('modal-auth')?.addEventListener('click', (e) => {
+      if (e.target.id === 'modal-auth') closeAuthModal();
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeAuthModal();
+    });
+
+    // Alternância de Preço Mensal / Anual
     function setBillingCycle(cycle) {
       const btnMensal = document.getElementById('toggle-pricing-mensal');
       const btnAnual = document.getElementById('toggle-pricing-anual');
@@ -346,8 +430,8 @@
       const proSub = document.getElementById('price-pro-sub');
 
       if (cycle === 'anual') {
-        btnAnual.className = 'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-600/30 flex items-center gap-1.5';
-        btnMensal.className = 'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition text-slate-600 dark:text-slate-400';
+        btnAnual.className = 'px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-600/30 flex items-center gap-2';
+        btnMensal.className = 'px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition text-slate-600 dark:text-slate-400';
         
         if (starterVal) starterVal.textContent = 'R$ 99,00';
         if (starterUnit) starterUnit.textContent = '/ano';
@@ -357,8 +441,8 @@
         if (proUnit) proUnit.textContent = '/ano';
         if (proSub) proSub.textContent = 'Equivalente a R$ 16,58/mês (45% OFF)';
       } else {
-        btnMensal.className = 'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-600/30 flex items-center gap-1.5';
-        btnAnual.className = 'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition text-slate-600 dark:text-slate-400';
+        btnMensal.className = 'px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-600/30 flex items-center gap-2';
+        btnAnual.className = 'px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition text-slate-600 dark:text-slate-400';
 
         if (starterVal) starterVal.textContent = 'R$ 14,90';
         if (starterUnit) starterUnit.textContent = '/mês';
@@ -400,7 +484,7 @@
       const isDark = document.documentElement.classList.contains('dark');
       const btn = document.getElementById('btn-theme-login');
       if (btn) {
-        btn.innerHTML = `<i data-lucide="${isDark ? 'sun' : 'moon'}" class="w-5 h-5"></i>`;
+        btn.innerHTML = `<i data-lucide="${isDark ? 'sun' : 'moon'}" class="w-4 h-4 sm:w-5 sm:h-5"></i>`;
         btn.setAttribute('title', isDark ? 'Mudar para tema claro' : 'Mudar para tema escuro');
         lucide.createIcons();
       }
@@ -416,15 +500,15 @@
       if (!btnLogin || !btnRegister) return;
 
       btnLogin.addEventListener('click', () => {
-        btnLogin.className = 'py-2.5 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-md shadow-indigo-600/30';
-        btnRegister.className = 'py-2.5 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200';
+        btnLogin.className = 'py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-md shadow-indigo-600/30';
+        btnRegister.className = 'py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200';
         formLogin.classList.remove('hidden');
         formRegister.classList.add('hidden');
       });
 
       btnRegister.addEventListener('click', () => {
-        btnRegister.className = 'py-2.5 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-md shadow-indigo-600/30';
-        btnLogin.className = 'py-2.5 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200';
+        btnRegister.className = 'py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-md shadow-indigo-600/30';
+        btnLogin.className = 'py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200';
         formRegister.classList.remove('hidden');
         formLogin.classList.add('hidden');
       });
@@ -522,11 +606,10 @@
       });
     }
 
-    // Google Sign-In (Nativo GSI com Client ID + Fallback Amigável para Localhost)
+    // Google Sign-In
     function setupGoogleAuth() {
       const isDark = () => document.documentElement.classList.contains('dark');
 
-      // Se GOOGLE_CLIENT_ID estiver presente, inicializa o Google Identity Services oficial
       if (GOOGLE_CLIENT_ID && typeof google !== 'undefined' && google.accounts) {
         google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
@@ -535,13 +618,11 @@
       }
 
       document.getElementById('btn-google-login')?.addEventListener('click', async () => {
-        // Se há Client ID do Google configurado, aciona o prompt nativo oficial da Google
         if (GOOGLE_CLIENT_ID && typeof google !== 'undefined' && google.accounts) {
           google.accounts.id.prompt();
           return;
         }
 
-        // Em modo de desenvolvimento local (sem GOOGLE_CLIENT_ID), exibir modal moderno de teste
         const darkTheme = isDark();
         const bgModal = darkTheme ? '#0f172a' : '#ffffff';
         const textColor = darkTheme ? '#f8fafc' : '#0f172a';
@@ -626,7 +707,6 @@
       });
     }
 
-    // Callback para resposta do Google Identity Services oficial (JWT Token)
     async function handleGoogleCredentialResponse(response) {
       try {
         const res = await fetch('/api/auth/google', {
