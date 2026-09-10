@@ -1,7 +1,7 @@
 import os
 import re
 import sqlite3
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -165,6 +165,26 @@ def _init_postgres_tables(conn):
             senha_hash TEXT,
             google_id TEXT UNIQUE,
             avatar_url TEXT,
+            plano TEXT DEFAULT 'pro',
+            plano_status TEXT DEFAULT 'trial',
+            trial_fim TIMESTAMP,
+            gateway TEXT,
+            customer_id TEXT,
+            subscription_id TEXT,
+            plano_periodo TEXT DEFAULT 'mensal',
+            plano_expira_em TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS assinaturas_historico (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+            gateway TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            plano TEXT,
+            valor NUMERIC DEFAULT 0.0,
+            status TEXT,
+            payload TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -245,7 +265,8 @@ def _init_postgres_tables(conn):
 
 def _migrate_postgres_tables(conn):
     cur = conn.cursor()
-    cols_to_add = [
+    # Migrações na tabela contas
+    cols_contas = [
         ("banco_id", "TEXT"),
         ("integracao_tipo", "TEXT DEFAULT 'manual'"),
         ("integracao_status", "TEXT DEFAULT 'desconectado'"),
@@ -256,22 +277,60 @@ def _migrate_postgres_tables(conn):
         ("ultimo_sync", "TEXT"),
         ("sync_auto", "INTEGER DEFAULT 0")
     ]
-    for col_name, col_def in cols_to_add:
+    for col_name, col_def in cols_contas:
         try:
             cur.execute(f"ALTER TABLE contas ADD COLUMN IF NOT EXISTS {col_name} {col_def};")
         except Exception:
             pass
+
+    # Migrações na tabela usuarios (SaaS Tiers & Subscriptions)
+    cols_usuarios = [
+        ("plano", "TEXT DEFAULT 'pro'"),
+        ("plano_status", "TEXT DEFAULT 'trial'"),
+        ("trial_fim", "TIMESTAMP"),
+        ("gateway", "TEXT"),
+        ("customer_id", "TEXT"),
+        ("subscription_id", "TEXT"),
+        ("plano_periodo", "TEXT DEFAULT 'mensal'"),
+        ("plano_expira_em", "TIMESTAMP")
+    ]
+    for col_name, col_def in cols_usuarios:
+        try:
+            cur.execute(f"ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS {col_name} {col_def};")
+        except Exception:
+            pass
+
+    # Tabela assinaturas_historico
+    try:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS assinaturas_historico (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+                gateway TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                plano TEXT,
+                valor NUMERIC DEFAULT 0.0,
+                status TEXT,
+                payload TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+    except Exception:
+        pass
+
     conn.commit()
 
 def _migrate_sqlite_tables(conn):
     cursor = conn.cursor()
+    
+    # Contas
     try:
         cursor.execute("PRAGMA table_info(contas)")
         existing_cols = [row[1] for row in cursor.fetchall()]
     except Exception:
         existing_cols = []
 
-    cols_to_add = [
+    cols_contas = [
         ("banco_id", "TEXT"),
         ("integracao_tipo", "TEXT DEFAULT 'manual'"),
         ("integracao_status", "TEXT DEFAULT 'desconectado'"),
@@ -282,12 +341,56 @@ def _migrate_sqlite_tables(conn):
         ("ultimo_sync", "TEXT"),
         ("sync_auto", "INTEGER DEFAULT 0")
     ]
-    for col_name, col_def in cols_to_add:
+    for col_name, col_def in cols_contas:
         if col_name not in existing_cols:
             try:
                 cursor.execute(f"ALTER TABLE contas ADD COLUMN {col_name} {col_def};")
             except Exception:
                 pass
+
+    # Usuarios
+    try:
+        cursor.execute("PRAGMA table_info(usuarios)")
+        existing_user_cols = [row[1] for row in cursor.fetchall()]
+    except Exception:
+        existing_user_cols = []
+
+    cols_usuarios = [
+        ("plano", "TEXT DEFAULT 'pro'"),
+        ("plano_status", "TEXT DEFAULT 'trial'"),
+        ("trial_fim", "DATETIME"),
+        ("gateway", "TEXT"),
+        ("customer_id", "TEXT"),
+        ("subscription_id", "TEXT"),
+        ("plano_periodo", "TEXT DEFAULT 'mensal'"),
+        ("plano_expira_em", "DATETIME")
+    ]
+    for col_name, col_def in cols_usuarios:
+        if col_name not in existing_user_cols:
+            try:
+                cursor.execute(f"ALTER TABLE usuarios ADD COLUMN {col_name} {col_def};")
+            except Exception:
+                pass
+
+    # Tabela assinaturas_historico
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS assinaturas_historico (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                gateway TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                plano TEXT,
+                valor REAL DEFAULT 0.0,
+                status TEXT,
+                payload TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
+            );
+        """)
+    except Exception:
+        pass
+
     conn.commit()
 
 def _init_sqlite_tables(conn):
@@ -300,7 +403,29 @@ def _init_sqlite_tables(conn):
             senha_hash TEXT,
             google_id TEXT UNIQUE,
             avatar_url TEXT,
+            plano TEXT DEFAULT 'pro',
+            plano_status TEXT DEFAULT 'trial',
+            trial_fim DATETIME,
+            gateway TEXT,
+            customer_id TEXT,
+            subscription_id TEXT,
+            plano_periodo TEXT DEFAULT 'mensal',
+            plano_expira_em DATETIME,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS assinaturas_historico (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            gateway TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            plano TEXT,
+            valor REAL DEFAULT 0.0,
+            status TEXT,
+            payload TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
         );
     """)
     cursor.execute("""
@@ -428,25 +553,30 @@ def seed_user_default_categories(user_id, conn):
 # GERENCIAMENTO DE USUÁRIOS
 # ==========================================
 
-def create_user(nome, email, senha=None, google_id=None, avatar_url=None):
+def create_user(nome, email, senha=None, google_id=None, avatar_url=None, plano='pro', plano_status='trial'):
     conn = get_connection()
     cursor = conn.cursor()
 
     email_clean = email.strip().lower()
     nome_clean = nome.strip()
     senha_hash = generate_password_hash(senha) if senha else None
+    trial_fim = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
 
     cursor.execute("""
-        INSERT INTO usuarios (nome, email, senha_hash, google_id, avatar_url)
-        VALUES (?, ?, ?, ?, ?)
-    """, (nome_clean, email_clean, senha_hash, google_id, avatar_url))
+        INSERT INTO usuarios (nome, email, senha_hash, google_id, avatar_url, plano, plano_status, trial_fim, plano_periodo)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'mensal')
+    """, (nome_clean, email_clean, senha_hash, google_id, avatar_url, plano, plano_status, trial_fim))
 
     user_id = cursor.lastrowid
     conn.commit()
 
     seed_user_default_categories(user_id, conn)
 
-    cursor.execute("SELECT id, nome, email, avatar_url FROM usuarios WHERE id = ?", (user_id,))
+    cursor.execute("""
+        SELECT id, nome, email, avatar_url, plano, plano_status, trial_fim, 
+               gateway, customer_id, subscription_id, plano_periodo, plano_expira_em, created_at 
+        FROM usuarios WHERE id = ?
+    """, (user_id,))
     user = dict(cursor.fetchone())
     conn.close()
 
@@ -463,10 +593,136 @@ def get_user_by_email(email):
 def get_user_by_id(user_id):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, nome, email, google_id, avatar_url, created_at FROM usuarios WHERE id = ?", (user_id,))
+    cursor.execute("""
+        SELECT id, nome, email, google_id, avatar_url, plano, plano_status, trial_fim, 
+               gateway, customer_id, subscription_id, plano_periodo, plano_expira_em, created_at 
+        FROM usuarios WHERE id = ?
+    """, (user_id,))
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
+
+# ==========================================
+# GESTÃO DE PLANOS & ASSINATURAS SAAS
+# ==========================================
+
+def get_user_plan_details(user_id):
+    user = get_user_by_id(user_id)
+    if not user:
+        return None
+    
+    plano = user.get('plano') or 'free'
+    status = user.get('plano_status') or 'active'
+    trial_fim = user.get('trial_fim')
+    expira_em = user.get('plano_expira_em')
+
+    agora = datetime.now()
+    dias_restantes_trial = 0
+    is_trial = False
+
+    if status == 'trial' and trial_fim:
+        try:
+            if isinstance(trial_fim, str):
+                tf = datetime.fromisoformat(trial_fim.replace('Z', ''))
+            else:
+                tf = trial_fim
+            if tf > agora:
+                is_trial = True
+                dias_restantes_trial = max(1, (tf - agora).days + 1)
+            else:
+                # Trial expirou: altera para free expirado
+                status = 'expired'
+                plano = 'free'
+                update_user_plan(user_id, plano='free', plano_status='expired')
+        except Exception:
+            pass
+    elif status == 'active' and expira_em:
+        try:
+            if isinstance(expira_em, str):
+                exp = datetime.fromisoformat(expira_em.replace('Z', ''))
+            else:
+                exp = expira_em
+            if exp < agora:
+                status = 'expired'
+                plano = 'free'
+                update_user_plan(user_id, plano='free', plano_status='expired')
+        except Exception:
+            pass
+
+    return {
+        "user_id": user_id,
+        "plano": plano,
+        "plano_status": status,
+        "is_trial": is_trial,
+        "dias_restantes_trial": dias_restantes_trial,
+        "trial_fim": str(trial_fim) if trial_fim else None,
+        "plano_periodo": user.get('plano_periodo') or 'mensal',
+        "gateway": user.get('gateway'),
+        "customer_id": user.get('customer_id'),
+        "subscription_id": user.get('subscription_id'),
+        "plano_expira_em": str(expira_em) if expira_em else None
+    }
+
+def update_user_plan(user_id, plano, plano_status, plano_periodo='mensal', gateway=None, customer_id=None, subscription_id=None, plano_expira_em=None):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE usuarios
+        SET plano = ?,
+            plano_status = ?,
+            plano_periodo = COALESCE(?, plano_periodo),
+            gateway = COALESCE(?, gateway),
+            customer_id = COALESCE(?, customer_id),
+            subscription_id = COALESCE(?, subscription_id),
+            plano_expira_em = ?
+        WHERE id = ?
+    """, (plano, plano_status, plano_periodo, gateway, customer_id, subscription_id, plano_expira_em, user_id))
+    conn.commit()
+    conn.close()
+
+def log_subscription_event(user_id, gateway, event_type, plano=None, valor=0.0, status='success', payload=None):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO assinaturas_historico (user_id, gateway, event_type, plano, valor, status, payload)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, gateway, event_type, plano, float(valor or 0.0), status, str(payload or '')))
+    conn.commit()
+    conn.close()
+
+def get_user_usage_stats(user_id, mes=None, ano=None):
+    if not mes or not ano:
+        now = datetime.now()
+        mes = now.month
+        ano = now.year
+
+    m_str = f"{int(mes):02d}"
+    y_str = str(ano)
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Contagem de contas ativas
+    cursor.execute("SELECT COUNT(*) FROM contas WHERE user_id = ? AND ativo = 1", (user_id,))
+    row_contas = cursor.fetchone()
+    total_contas = row_contas[0] if row_contas else 0
+
+    # Contagem de transações no mês atual
+    cursor.execute("""
+        SELECT COUNT(*) FROM transacoes 
+        WHERE user_id = ? AND strftime('%m', data) = ? AND strftime('%Y', data) = ?
+    """, (user_id, m_str, y_str))
+    row_trans = cursor.fetchone()
+    total_transacoes_mes = row_trans[0] if row_trans else 0
+
+    conn.close()
+
+    return {
+        "total_contas": int(total_contas),
+        "total_transacoes_mes": int(total_transacoes_mes),
+        "mes": int(mes),
+        "ano": int(ano)
+    }
 
 # ==========================================
 # MOTOR INTELIGENTE DE AUTO-CATEGORIZAÇÃO

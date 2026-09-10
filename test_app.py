@@ -282,5 +282,141 @@ class TestFinFlowBankImport(unittest.TestCase):
         self.assertIn('despesas_diarias', data)
         print("OK: Motor de IA de Insights Financeiros e graficos objetivos validados com sucesso!")
 
+    def test_08_saas_user_registration_trial(self):
+        # 1. Registrar um novo usuário
+        email = "novo.saas.user@exemplo.com"
+        res = self.app.post('/api/auth/register', json={
+            "nome": "Usuário SaaS",
+            "email": email,
+            "senha": "senhaSegura123"
+        })
+        self.assertEqual(res.status_code, 201)
+        data = json.loads(res.data)
+        self.assertEqual(data['user']['plano'], 'pro')
+        self.assertEqual(data['user']['plano_status'], 'trial')
+        self.assertIsNotNone(data['user']['trial_fim'])
+        print("OK: Novo usuário cadastrado recebe automaticamente 7 dias de PRO Trial")
+
+    def test_09_saas_subscription_status_endpoint(self):
+        self.app.post('/api/auth/login', json={
+            "email": "novo.saas.user@exemplo.com",
+            "senha": "senhaSegura123"
+        })
+
+        res = self.app.get('/api/subscription/status')
+        self.assertEqual(res.status_code, 200)
+        data = json.loads(res.data)
+        self.assertEqual(data['status'], 'success')
+        self.assertTrue(data['subscription']['is_trial'])
+        self.assertEqual(data['subscription']['plano'], 'pro')
+        self.assertIn('starter', data['planos_disponiveis'])
+        self.assertIn('pro', data['planos_disponiveis'])
+        self.assertIn('family', data['planos_disponiveis'])
+        print("OK: Endpoint /api/subscription/status retornou dados completos do plano e catálogo")
+
+    def test_10_saas_free_tier_limits_enforcement(self):
+        user = database.get_user_by_email("novo.saas.user@exemplo.com")
+        self.assertIsNotNone(user)
+
+        # Simular transição para plano Free expirado
+        database.update_user_plan(user['id'], plano='free', plano_status='expired')
+
+        self.app.post('/api/auth/login', json={
+            "email": "novo.saas.user@exemplo.com",
+            "senha": "senhaSegura123"
+        })
+
+        # 1. Cadastrar 2 contas (permitido no Free)
+        res_c1 = self.app.post('/api/contas', json={"nome": "Conta Free 1", "tipo": "Corrente"})
+        self.assertEqual(res_c1.status_code, 201)
+        res_c2 = self.app.post('/api/contas', json={"nome": "Conta Free 2", "tipo": "Poupança"})
+        self.assertEqual(res_c2.status_code, 201)
+
+        # 2. Tentar cadastrar a 3ª conta (deve ser bloqueado com 403 upgrade_required)
+        res_c3 = self.app.post('/api/contas', json={"nome": "Conta Free 3 Bloqueada", "tipo": "Carteira"})
+        self.assertEqual(res_c3.status_code, 403)
+        data_c3 = json.loads(res_c3.data)
+        self.assertTrue(data_c3.get('upgrade_required'))
+        self.assertEqual(data_c3.get('recurso'), 'contas')
+
+        # 3. Tentar exportar CSV (deve ser bloqueado no Free)
+        res_export = self.app.get('/api/export/csv')
+        self.assertEqual(res_export.status_code, 403)
+        data_exp = json.loads(res_export.data)
+        self.assertTrue(data_exp.get('upgrade_required'))
+
+        # 4. Tentar importar OFX (deve ser bloqueado no Free)
+        data_file = {
+            'conta_id': '1',
+            'arquivo': (io.BytesIO(SAMPLE_OFX.encode('utf-8')), 'extrato.ofx')
+        }
+        res_imp = self.app.post('/api/import/preview', data=data_file, content_type='multipart/form-data')
+        self.assertEqual(res_imp.status_code, 403)
+        data_imp_res = json.loads(res_imp.data)
+        self.assertTrue(data_imp_res.get('upgrade_required'))
+
+        print("OK: Limites do plano Free (2 contas, bloqueio de exportacao e importacao OFX) devidamente aplicados")
+
+    def test_11_saas_checkout_upgrade_to_pro(self):
+        self.app.post('/api/auth/login', json={
+            "email": "novo.saas.user@exemplo.com",
+            "senha": "senhaSegura123"
+        })
+
+        # Realizar checkout no plano PRO Anual
+        res = self.app.post('/api/subscription/checkout', json={
+            "plano": "pro",
+            "periodo": "anual",
+            "metodo": "cartao",
+            "gateway": "stripe"
+        })
+        self.assertEqual(res.status_code, 200)
+        data = json.loads(res.data)
+        self.assertTrue(data['success'])
+        self.assertEqual(data['plano'], 'pro')
+        self.assertEqual(data['valor'], 199.00)
+
+        # Verificar se os limites foram liberados
+        res_c3 = self.app.post('/api/contas', json={"nome": "Conta PRO Liberada", "tipo": "Investimento"})
+        self.assertEqual(res_c3.status_code, 201)
+
+        res_export = self.app.get('/api/export/csv')
+        self.assertEqual(res_export.status_code, 200)
+
+        print("OK: Checkout de upgrade para PRO Anual ativado com sucesso e desbloqueou todos os recursos")
+
+    def test_12_saas_webhook_processing(self):
+        user = database.get_user_by_email("novo.saas.user@exemplo.com")
+        self.assertIsNotNone(user)
+
+        # 1. Simular webhook de cancelamento vindo do gateway
+        res_cancel = self.app.post('/api/subscription/webhook/stripe', json={
+            "type": "customer.subscription.deleted",
+            "user_id": user['id'],
+            "data": {"object": {"customer": "cus_123"}}
+        })
+        self.assertEqual(res_cancel.status_code, 200)
+
+        # Verificar se o usuário voltou para free cancelado
+        user_updated = database.get_user_by_id(user['id'])
+        self.assertEqual(user_updated['plano'], 'free')
+        self.assertEqual(user_updated['plano_status'], 'canceled')
+
+        # 2. Simular webhook de renovação/pagamento aprovado (ex: Asaas)
+        res_paid = self.app.post('/api/subscription/webhook/asaas', json={
+            "event": "PAYMENT_CONFIRMED",
+            "user_id": user['id'],
+            "plano": "pro",
+            "periodo": "mensal"
+        })
+        self.assertEqual(res_paid.status_code, 200)
+
+        user_renewed = database.get_user_by_id(user['id'])
+        self.assertEqual(user_renewed['plano'], 'pro')
+        self.assertEqual(user_renewed['plano_status'], 'active')
+
+        print("OK: Webhooks universais processaram cancelamentos e confirmacoes de pagamento perfeitamente")
+
 if __name__ == '__main__':
     unittest.main()
+

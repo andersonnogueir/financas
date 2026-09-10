@@ -95,6 +95,13 @@
 
         <!-- Ações do Topo e Perfil do Usuário -->
         <div class="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          <!-- Badge do Plano & Assinatura (Clique para Gerenciar / Upgrade) -->
+          <button id="btn-open-modal-planos" title="Gerenciar Assinatura ou Fazer Upgrade" class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-xl bg-gradient-to-r from-indigo-500/15 via-purple-500/15 to-pink-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shadow-sm transition transform hover:-translate-y-0.5">
+            <i data-lucide="crown" class="w-3.5 h-3.5 text-amber-500"></i>
+            <span id="badge-plano-nome">PRO</span>
+            <span id="badge-plano-tag" class="hidden text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30">7d Trial</span>
+          </button>
+
           <!-- Alternar Tema -->
           <button id="btn-toggle-theme" title="Alternar Modo Escuro/Claro" class="p-2 sm:p-2.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/60 dark:border-slate-700/60 transition">
             <i id="theme-icon" data-lucide="sun" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
@@ -1149,6 +1156,172 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: PLANOS & UPGRADE SAAS -->
+  <div id="modal-planos" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+      
+      <!-- Topo Modal -->
+      <div class="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/50">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="p-1.5 rounded-lg bg-indigo-600 text-white"><i data-lucide="crown" class="w-4 h-4"></i></span>
+            <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Planos & Assinatura FinFlow</h3>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Desbloqueie automação de extratos (OFX/CSV) com IA, lançamentos ilimitados e relatórios completos</p>
+        </div>
+        <button class="btn-close-modal text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Corpo com Scroll -->
+      <div class="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1">
+        
+        <!-- Status Atual & Consumo -->
+        <div id="box-status-plano-atual" class="bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/30">
+              <i data-lucide="sparkles" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <p class="text-[11px] text-indigo-700 dark:text-indigo-300 font-semibold uppercase tracking-wider">Seu Plano Atual</p>
+              <h4 id="status-plano-titulo" class="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                Padrão PRO <span id="status-plano-badge-sub" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">Ativo</span>
+              </h4>
+            </div>
+          </div>
+          <div id="box-plano-uso" class="text-xs text-slate-600 dark:text-slate-400 text-left sm:text-right sm:border-l border-indigo-200 dark:border-indigo-800 sm:pl-4">
+            <p>Contas cadastradas: <b id="status-uso-contas" class="text-slate-900 dark:text-white">0 / 2</b></p>
+            <p class="mt-0.5">Lançamentos no mês: <b id="status-uso-trans" class="text-slate-900 dark:text-white">0 / 25</b></p>
+          </div>
+        </div>
+
+        <!-- Seletor Mensal / Anual -->
+        <div class="flex justify-center">
+          <div class="inline-flex items-center bg-slate-100 dark:bg-slate-950 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-inner">
+            <button id="btn-modal-cycle-mensal" type="button" class="px-4 py-1.5 rounded-xl text-xs font-bold transition text-slate-600 dark:text-slate-400" onclick="switchModalBillingCycle('mensal')">
+              Mensal
+            </button>
+            <button id="btn-modal-cycle-anual" type="button" class="px-4 py-1.5 rounded-xl text-xs font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-600/30 flex items-center gap-1.5" onclick="switchModalBillingCycle('anual')">
+              <span>Anual</span>
+              <span class="text-[9px] bg-emerald-500 text-white px-1.5 py-0.2 rounded-full font-black uppercase">Economize 45%</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Grid dos 3 Cards no Modal -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
+          
+          <!-- Starter / MVP -->
+          <div class="border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col justify-between bg-slate-50/50 dark:bg-slate-850/50">
+            <div>
+              <div class="flex items-center justify-between">
+                <h4 class="text-sm font-bold text-slate-900 dark:text-white">Starter / MVP</h4>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">Planilhas Turbo</span>
+              </div>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Controle manual ilimitado</p>
+
+              <div class="mt-3 mb-4">
+                <div class="flex items-baseline gap-1">
+                  <span id="modal-price-starter" class="text-2xl font-black text-slate-900 dark:text-white">R$ 99,00</span>
+                  <span id="modal-unit-starter" class="text-xs text-slate-500 dark:text-slate-400">/ano</span>
+                </div>
+                <p id="modal-sub-starter" class="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Equivalente a R$ 8,25/mês</p>
+              </div>
+
+              <ul class="space-y-2 text-[11px] text-slate-600 dark:text-slate-300">
+                <li class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 shrink-0"></i> Até 10 contas bancárias</li>
+                <li class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 shrink-0"></i> <b>Lançamentos ilimitados</b></li>
+                <li class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 shrink-0"></i> <b>Exportação CSV/Excel</b></li>
+                <li class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 shrink-0"></i> Dashboards completos</li>
+                <li class="flex items-center gap-1.5 text-slate-400 dark:text-slate-600"><i data-lucide="x" class="w-3.5 h-3.5 shrink-0"></i> Importação OFX com IA</li>
+              </ul>
+            </div>
+
+            <button onclick="iniciarCheckoutPlano('starter')" class="mt-4 w-full py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition">
+              Assinar Starter
+            </button>
+          </div>
+
+          <!-- Padrão PRO (Destaque) -->
+          <div class="border-2 border-indigo-500 rounded-2xl p-4 flex flex-col justify-between bg-gradient-to-b from-indigo-950/40 via-slate-900 to-slate-900 relative shadow-lg">
+            <div class="absolute -top-2.5 right-4 bg-indigo-600 text-white text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full shadow-sm">
+              Mais Escolhido
+            </div>
+            <div>
+              <div class="flex items-center justify-between">
+                <h4 class="text-sm font-bold text-white flex items-center gap-1">
+                  <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i>
+                  Padrão PRO
+                </h4>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">7 Dias Grátis</span>
+              </div>
+              <p class="text-[11px] text-indigo-200 mt-0.5">Automação total com IA</p>
+
+              <div class="mt-3 mb-4">
+                <div class="flex items-baseline gap-1">
+                  <span id="modal-price-pro" class="text-2xl font-black text-white">R$ 199,00</span>
+                  <span id="modal-unit-pro" class="text-xs text-indigo-200">/ano</span>
+                </div>
+                <p id="modal-sub-pro" class="text-[10px] text-amber-300 font-semibold">Equivalente a R$ 16,58/mês</p>
+              </div>
+
+              <ul class="space-y-2 text-[11px] text-slate-200">
+                <li class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400 shrink-0"></i> <b>Contas ilimitadas</b></li>
+                <li class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400 shrink-0"></i> <b>Lançamentos ilimitados</b></li>
+                <li class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400 shrink-0"></i> <b>Importação OFX/CSV com IA</b></li>
+                <li class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400 shrink-0"></i> <b>Auto-Categorização com Memória</b></li>
+                <li class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400 shrink-0"></i> <b>Assistente de IA & Poupança</b></li>
+              </ul>
+            </div>
+
+            <button onclick="iniciarCheckoutPlano('pro')" class="mt-4 w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/40 transition flex items-center justify-center gap-1.5">
+              <span>Assinar Plano PRO</span>
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+          <!-- Família / MEI -->
+          <div class="border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col justify-between bg-slate-50/50 dark:bg-slate-850/50">
+            <div>
+              <div class="flex items-center justify-between">
+                <h4 class="text-sm font-bold text-slate-900 dark:text-white">Família / MEI</h4>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300">Empresarial</span>
+              </div>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Gestão compartilhada & PJ</p>
+
+              <div class="mt-3 mb-4">
+                <div class="flex items-baseline gap-1">
+                  <span id="modal-price-family" class="text-2xl font-black text-slate-900 dark:text-white">R$ 349,00</span>
+                  <span id="modal-unit-family" class="text-xs text-slate-500 dark:text-slate-400">/ano</span>
+                </div>
+                <p id="modal-sub-family" class="text-[10px] text-purple-600 dark:text-purple-400 font-semibold">Equivalente a R$ 29,00/mês</p>
+              </div>
+
+              <ul class="space-y-2 text-[11px] text-slate-600 dark:text-slate-300">
+                <li class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 shrink-0"></i> Tudo do Padrão PRO</li>
+                <li class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 shrink-0"></i> Múltiplos perfis / usuários</li>
+                <li class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 shrink-0"></i> Separação finanças PF e PJ</li>
+                <li class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 shrink-0"></i> Relatórios para IRPF/DASN</li>
+              </ul>
+            </div>
+
+            <button onclick="iniciarCheckoutPlano('family')" class="mt-4 w-full py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition">
+              Assinar Família/MEI
+            </button>
+          </div>
+
+        </div>
+
+        <div class="text-center text-[11px] text-slate-500 dark:text-slate-400 pt-2 flex flex-wrap items-center justify-center gap-4">
+          <span class="flex items-center gap-1"><i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-500"></i> Pagamento Seguro via Stripe / Asaas</span>
+          <span class="flex items-center gap-1"><i data-lucide="credit-card" class="w-3.5 h-3.5 text-indigo-500"></i> Cartão de Crédito & Pix Instantâneo</span>
+          <span class="flex items-center gap-1"><i data-lucide="lock" class="w-3.5 h-3.5 text-amber-500"></i> Cancele quando quiser</span>
+        </div>
+      </div>
     </div>
   </div>
 

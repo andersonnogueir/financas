@@ -18,6 +18,8 @@ const state = {
   transacoes: [],
   recorrencias: [],
   regrasAprendidas: [],
+  modalBillingCycle: 'anual',
+  subscription: null,
   // Estado de Importação de Arquivo
   import: {
     selectedFile: null,
@@ -92,12 +94,246 @@ async function checkAuth() {
       avatarEl.src = state.user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(state.user.nome)}&background=6366f1&color=fff`;
     }
 
+    updateSubscriptionUI(state.user);
+
     return true;
   } catch (err) {
     window.location.href = '/login';
     return false;
   }
 }
+
+// ========================================================
+// CONTROLE DE ASSINATURA & PLANOS SAAS
+// ========================================================
+function updateSubscriptionUI(sub) {
+  if (!sub) return;
+  const badgeNome = document.getElementById('badge-plano-nome');
+  const badgeTag = document.getElementById('badge-plano-tag');
+  const statusTitulo = document.getElementById('status-plano-titulo');
+  const statusUsoContas = document.getElementById('status-uso-contas');
+  const statusUsoTrans = document.getElementById('status-uso-trans');
+
+  const planoNomeMap = {
+    'free': 'Freemium (Grátis)',
+    'starter': 'Starter / MVP',
+    'pro': 'Padrão PRO',
+    'family': 'Família / MEI'
+  };
+
+  const planoNomeCurto = {
+    'free': 'GRÁTIS',
+    'starter': 'STARTER',
+    'pro': 'PRO',
+    'family': 'FAMÍLIA'
+  };
+
+  const planoKey = sub.plano || 'free';
+  const isTrial = sub.is_trial || false;
+  const diasTrial = sub.dias_restantes_trial || 0;
+  const status = sub.plano_status || 'active';
+
+  if (badgeNome) {
+    badgeNome.textContent = planoNomeCurto[planoKey] || planoKey.toUpperCase();
+  }
+
+  if (badgeTag) {
+    if (isTrial) {
+      badgeTag.textContent = `${diasTrial}d Trial`;
+      badgeTag.className = 'text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30';
+      badgeTag.classList.remove('hidden');
+    } else if (status === 'expired' || status === 'canceled') {
+      badgeTag.textContent = 'Expirado';
+      badgeTag.className = 'text-[9px] px-1.5 py-0.2 rounded-full bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/30';
+      badgeTag.classList.remove('hidden');
+    } else if (planoKey !== 'free') {
+      badgeTag.textContent = 'Ativo';
+      badgeTag.className = 'text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30';
+      badgeTag.classList.remove('hidden');
+    } else {
+      badgeTag.classList.add('hidden');
+    }
+  }
+
+  if (statusTitulo) {
+    const badgeText = isTrial ? `${diasTrial} dias restantes (Trial)` : (status === 'active' ? 'Ativo' : (status === 'expired' ? 'Expirado' : 'Gratuito'));
+    const badgeStyle = isTrial 
+      ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/30' 
+      : (status === 'active' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' : 'bg-slate-500/20 text-slate-600 dark:text-slate-400 border-slate-500/30');
+
+    statusTitulo.innerHTML = `
+      ${sub.plano_nome || planoNomeMap[planoKey] || 'Padrão PRO'}
+      <span id="status-plano-badge-sub" class="text-[10px] px-2 py-0.5 rounded-full border ${badgeStyle}">${badgeText}</span>
+    `;
+  }
+
+  if (statusUsoContas && sub.uso && sub.limites) {
+    const maxC = sub.limites.max_contas > 1000 ? 'Ilimitadas' : sub.limites.max_contas;
+    statusUsoContas.textContent = `${sub.uso.total_contas || 0} / ${maxC}`;
+  }
+
+  if (statusUsoTrans && sub.uso && sub.limites) {
+    const maxT = sub.limites.max_transacoes_mes > 1000 ? 'Ilimitados' : sub.limites.max_transacoes_mes;
+    statusUsoTrans.textContent = `${sub.uso.total_transacoes_mes || 0} / ${maxT}`;
+  }
+}
+
+async function loadSubscriptionStatus() {
+  try {
+    const res = await fetch('/api/subscription/status');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.subscription) {
+      state.subscription = data.subscription;
+      if (state.user) {
+        state.user.plano = data.subscription.plano;
+        state.user.plano_nome = data.subscription.plano_nome;
+        state.user.plano_status = data.subscription.plano_status;
+        state.user.is_trial = data.subscription.is_trial;
+        state.user.dias_restantes_trial = data.subscription.dias_restantes_trial;
+        state.user.limites = data.subscription.limites;
+        state.user.uso = data.subscription.uso;
+        state.user.permissoes = data.subscription.permissoes;
+      }
+      updateSubscriptionUI(data.subscription);
+    }
+  } catch (err) {
+    console.error('Erro ao carregar status da assinatura:', err);
+  }
+}
+
+function openModalPlanos() {
+  loadSubscriptionStatus();
+  openModal('modal-planos');
+}
+window.openModalPlanos = openModalPlanos;
+
+function switchModalBillingCycle(cycle) {
+  state.modalBillingCycle = cycle;
+  const btnMensal = document.getElementById('btn-modal-cycle-mensal');
+  const btnAnual = document.getElementById('btn-modal-cycle-anual');
+
+  const pStarter = document.getElementById('modal-price-starter');
+  const uStarter = document.getElementById('modal-unit-starter');
+  const sStarter = document.getElementById('modal-sub-starter');
+
+  const pPro = document.getElementById('modal-price-pro');
+  const uPro = document.getElementById('modal-unit-pro');
+  const sPro = document.getElementById('modal-sub-pro');
+
+  const pFam = document.getElementById('modal-price-family');
+  const uFam = document.getElementById('modal-unit-family');
+  const sFam = document.getElementById('modal-sub-family');
+
+  if (cycle === 'anual') {
+    if (btnAnual) btnAnual.className = 'px-4 py-1.5 rounded-xl text-xs font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-600/30 flex items-center gap-1.5';
+    if (btnMensal) btnMensal.className = 'px-4 py-1.5 rounded-xl text-xs font-bold transition text-slate-600 dark:text-slate-400';
+
+    if (pStarter) pStarter.textContent = 'R$ 99,00';
+    if (uStarter) uStarter.textContent = '/ano';
+    if (sStarter) sStarter.textContent = 'Equivalente a R$ 8,25/mês (45% OFF)';
+
+    if (pPro) pPro.textContent = 'R$ 199,00';
+    if (uPro) uPro.textContent = '/ano';
+    if (sPro) sPro.textContent = 'Equivalente a R$ 16,58/mês (45% OFF)';
+
+    if (pFam) pFam.textContent = 'R$ 349,00';
+    if (uFam) uFam.textContent = '/ano';
+    if (sFam) sFam.textContent = 'Equivalente a R$ 29,00/mês (45% OFF)';
+  } else {
+    if (btnMensal) btnMensal.className = 'px-4 py-1.5 rounded-xl text-xs font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-600/30 flex items-center gap-1.5';
+    if (btnAnual) btnAnual.className = 'px-4 py-1.5 rounded-xl text-xs font-bold transition text-slate-600 dark:text-slate-400';
+
+    if (pStarter) pStarter.textContent = 'R$ 14,90';
+    if (uStarter) uStarter.textContent = '/mês';
+    if (sStarter) sStarter.textContent = 'Cobrança mensal flexível';
+
+    if (pPro) pPro.textContent = 'R$ 29,90';
+    if (uPro) uPro.textContent = '/mês';
+    if (sPro) sPro.textContent = 'Cobrança mensal flexível';
+
+    if (pFam) pFam.textContent = 'R$ 49,90';
+    if (uFam) uFam.textContent = '/mês';
+    if (sFam) sFam.textContent = 'Cobrança mensal flexível';
+  }
+}
+window.switchModalBillingCycle = switchModalBillingCycle;
+
+async function iniciarCheckoutPlano(plano, metodo = 'cartao') {
+  const periodo = state.modalBillingCycle || 'anual';
+  
+  Swal.fire({
+    title: 'Processando Assinatura...',
+    text: `Configurando sua ativação no plano ${plano.toUpperCase()}...`,
+    allowOutsideClick: false,
+    didOpen: () => {
+      Swal.showLoading();
+    }
+  });
+
+  try {
+    const res = await fetch('/api/subscription/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plano, periodo, metodo, gateway: 'stripe' })
+    });
+
+    const data = await res.json();
+    Swal.close();
+
+    if (res.ok && data.success) {
+      closeModal('modal-planos');
+      await loadSubscriptionStatus();
+      await loadAllData();
+
+      Swal.fire({
+        icon: 'success',
+        title: 'Assinatura Ativada com Sucesso!',
+        html: `
+          <div class="space-y-2 text-center">
+            <p class="text-sm font-bold text-slate-800 dark:text-slate-200">Parabéns! Seu plano <b>${data.plano_nome}</b> (${data.periodo === 'anual' ? 'Anual' : 'Mensal'}) já está ativo.</p>
+            <p class="text-xs text-slate-500">Todos os recursos avançados foram liberados na sua conta.</p>
+          </div>
+        `,
+        confirmButtonColor: '#4f46e5',
+        confirmButtonText: 'Continuar no FinFlow'
+      });
+    } else {
+      Swal.fire({
+        icon: 'error',
+        title: 'Erro ao processar assinatura',
+        text: data.error || 'Não foi possível concluir o checkout.'
+      });
+    }
+  } catch (err) {
+    Swal.close();
+    console.error('Erro no checkout:', err);
+    Swal.fire({ icon: 'error', title: 'Erro de Conexão', text: 'Não foi possível comunicar com o gateway de pagamento.' });
+  }
+}
+window.iniciarCheckoutPlano = iniciarCheckoutPlano;
+
+function handleApiUpgradeOrError(res, data) {
+  if (data && data.upgrade_required) {
+    Swal.fire({
+      title: 'Recurso Exclusivo FinFlow',
+      text: data.error,
+      icon: 'info',
+      showCancelButton: true,
+      confirmButtonText: 'Ver Planos & Fazer Upgrade',
+      cancelButtonText: 'Agora Não',
+      confirmButtonColor: '#4f46e5',
+      cancelButtonColor: '#64748b'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        openModalPlanos();
+      }
+    });
+    return true;
+  }
+  return false;
+}
+
 
 async function handleLogout() {
   const result = await Swal.fire({
@@ -1173,6 +1409,7 @@ async function processImportFilePreview() {
     Swal.close();
 
     if (!res.ok || !data.success) {
+      if (handleApiUpgradeOrError(res, data)) return;
       Swal.fire({ icon: 'error', title: 'Erro ao processar extrato', text: data.error || 'Verifique o formato do arquivo.' });
       return;
     }
@@ -1379,6 +1616,7 @@ async function confirmImportTransactions() {
         confirmButtonColor: '#4f46e5'
       });
     } else {
+      if (handleApiUpgradeOrError(res, data)) return;
       Swal.fire({ icon: 'error', title: 'Erro ao gravar transações', text: data.error });
     }
   } catch (err) {
@@ -1845,6 +2083,43 @@ function setupEventListeners() {
   document.getElementById('btn-mes-atual')?.addEventListener('click', resetToCurrentMonth);
   document.getElementById('btn-toggle-theme')?.addEventListener('click', toggleTheme);
 
+  // Gatilho do Modal de Planos & Assinatura
+  document.getElementById('btn-open-modal-planos')?.addEventListener('click', openModalPlanos);
+
+  // Guarda de permissão para Exportação CSV
+  document.getElementById('btn-export-csv')?.addEventListener('click', (e) => {
+    if (state.user && state.user.permissoes && !state.user.permissoes.can_export) {
+      e.preventDefault();
+      handleApiUpgradeOrError(null, {
+        upgrade_required: true,
+        error: "A exportação completa de extratos em CSV/Excel é um recurso exclusivo dos planos Starter e PRO."
+      });
+    }
+  });
+
+  // Gatilho de Importação com verificação de plano
+  document.getElementById('btn-open-modal-import')?.addEventListener('click', (e) => {
+    if (state.user && state.user.permissoes && !state.user.permissoes.can_import_ofx) {
+      e.stopPropagation();
+      handleApiUpgradeOrError(null, {
+        upgrade_required: true,
+        error: "A Importação Inteligente de Extratos (OFX/CSV) com Auto-Categorização por IA é exclusiva do plano Padrão PRO."
+      });
+      return;
+    }
+  });
+
+  document.getElementById('btn-extrato-importar')?.addEventListener('click', () => {
+    if (state.user && state.user.permissoes && !state.user.permissoes.can_import_ofx) {
+      handleApiUpgradeOrError(null, {
+        upgrade_required: true,
+        error: "A Importação Inteligente de Extratos (OFX/CSV) com Auto-Categorização por IA é exclusiva do plano Padrão PRO."
+      });
+      return;
+    }
+    openModal('modal-import');
+  });
+
   // Tabs
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -2005,6 +2280,7 @@ function setupEventListeners() {
         await loadAllData();
         Swal.fire({ icon: 'success', title: id ? 'Lançamento Atualizado!' : 'Lançamento Salvo!', timer: 1400, showConfirmButton: false });
       } else {
+        if (handleApiUpgradeOrError(res, resData)) return;
         Swal.fire({ icon: 'error', title: 'Erro', text: resData.error });
       }
     } catch (err) {
@@ -2033,6 +2309,7 @@ function setupEventListeners() {
         await loadAllData();
         Swal.fire({ icon: 'success', title: 'Transferência Realizada!', timer: 1400, showConfirmButton: false });
       } else {
+        if (handleApiUpgradeOrError(res, resData)) return;
         Swal.fire({ icon: 'error', title: 'Erro', text: resData.error });
       }
     } catch (err) {
@@ -2076,6 +2353,7 @@ function setupEventListeners() {
         await loadAllData();
         Swal.fire({ icon: 'success', title: id ? 'Conta Atualizada!' : 'Conta Criada!', timer: 1400, showConfirmButton: false });
       } else {
+        if (handleApiUpgradeOrError(res, resData)) return;
         Swal.fire({ icon: 'error', title: 'Erro', text: resData.error });
       }
     } catch (err) {

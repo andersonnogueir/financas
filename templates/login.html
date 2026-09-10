@@ -189,8 +189,142 @@
     </div>
   </main>
 
+  <!-- SEÇÃO MODERNA DE PREÇOS & PLANOS SAAS -->
+  <section class="max-w-6xl w-full mx-auto px-4 py-12 relative z-10" id="pricing-section">
+    <div class="text-center max-w-2xl mx-auto mb-10">
+      <span class="px-3 py-1 text-xs font-bold rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
+        Planos & Preços Transparentes
+      </span>
+      <h2 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-3 tracking-tight">
+        Escolha o plano ideal para suas finanças
+      </h2>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-2">
+        Comece com <b>7 dias grátis de PRO</b>. Sem cobrança imediata e cancele quando quiser.
+      </p>
+
+      <!-- Toggle Mensal / Anual -->
+      <div class="mt-6 inline-flex items-center bg-slate-200/80 dark:bg-slate-900 p-1.5 rounded-2xl border border-slate-300/80 dark:border-slate-800 shadow-inner">
+        <button id="toggle-pricing-mensal" type="button" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition text-slate-600 dark:text-slate-400" onclick="setBillingCycle('mensal')">
+          Mensal
+        </button>
+        <button id="toggle-pricing-anual" type="button" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-600/30 flex items-center gap-1.5" onclick="setBillingCycle('anual')">
+          <span>Anual</span>
+          <span class="text-[10px] bg-emerald-500 text-white px-2 py-0.5 rounded-full font-black uppercase">Economize 45%</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Grid de Planos -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+      
+      <!-- Card 1: Freemium (Grátis) -->
+      <div class="bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition">
+        <div>
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white">Freemium</h3>
+            <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Gratuito</span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Para testes e uso inicial simples.</p>
+          
+          <div class="mt-4 mb-6">
+            <div class="flex items-baseline gap-1">
+              <span class="text-3xl font-black text-slate-900 dark:text-white">R$ 0</span>
+              <span class="text-xs text-slate-500 dark:text-slate-400">/mês</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-0.5">Sem cartão de crédito necessário</p>
+          </div>
+
+          <ul class="space-y-2.5 text-xs text-slate-600 dark:text-slate-300">
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Até 2 contas bancárias</li>
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Até 25 lançamentos / mês</li>
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Categorização padrão</li>
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Dashboard do mês atual</li>
+            <li class="flex items-center gap-2 text-slate-400 dark:text-slate-600"><i data-lucide="x" class="w-4 h-4 shrink-0"></i> Exportação em CSV/Excel</li>
+            <li class="flex items-center gap-2 text-slate-400 dark:text-slate-600"><i data-lucide="x" class="w-4 h-4 shrink-0"></i> Importação inteligente OFX/CSV</li>
+          </ul>
+        </div>
+
+        <button onclick="document.getElementById('tab-btn-register').click(); window.scrollTo({top: 0, behavior: 'smooth'});" class="mt-6 w-full py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold transition">
+          Começar Grátis
+        </button>
+      </div>
+
+      <!-- Card 2: Starter / MVP -->
+      <div class="bg-white/80 dark:bg-slate-900/80 border border-indigo-200 dark:border-indigo-900/60 rounded-3xl p-6 flex flex-col justify-between shadow-md hover:shadow-lg transition">
+        <div>
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white">Starter (MVP)</h3>
+            <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">Planilhas Turbo</span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Substituto definitivo de planilhas manuais.</p>
+          
+          <div class="mt-4 mb-6">
+            <div class="flex items-baseline gap-1">
+              <span id="price-starter-val" class="text-3xl font-black text-slate-900 dark:text-white">R$ 99,00</span>
+              <span id="price-starter-unit" class="text-xs text-slate-500 dark:text-slate-400">/ano</span>
+            </div>
+            <p id="price-starter-sub" class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">Equivalente a R$ 8,25/mês (45% OFF)</p>
+          </div>
+
+          <ul class="space-y-2.5 text-xs text-slate-600 dark:text-slate-300">
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Até 10 contas bancárias</li>
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> <b>Lançamentos ilimitados</b></li>
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> <b>Exportação completa em CSV/Excel</b></li>
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Dashboards completos e histórico</li>
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Recorrências e alertas de contas</li>
+            <li class="flex items-center gap-2 text-slate-400 dark:text-slate-600"><i data-lucide="x" class="w-4 h-4 shrink-0"></i> Importação inteligente OFX com IA</li>
+          </ul>
+        </div>
+
+        <button onclick="document.getElementById('tab-btn-register').click(); window.scrollTo({top: 0, behavior: 'smooth'});" class="mt-6 w-full py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold transition">
+          Escolher Starter
+        </button>
+      </div>
+
+      <!-- Card 3: Padrão PRO (Mais Popular) -->
+      <div class="bg-gradient-to-b from-indigo-900/40 via-slate-900 to-slate-900 border-2 border-indigo-500 rounded-3xl p-6 flex flex-col justify-between shadow-xl shadow-indigo-950/50 relative overflow-hidden transform md:-translate-y-2">
+        <div class="absolute top-0 right-0 bg-indigo-600 text-white text-[10px] font-black uppercase px-3 py-1 rounded-bl-xl tracking-wider">
+          Mais Escolhido
+        </div>
+        <div>
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-bold text-white flex items-center gap-1.5">
+              <i data-lucide="sparkles" class="w-4 h-4 text-amber-400"></i>
+              Padrão PRO
+            </h3>
+            <span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">7 Dias Grátis</span>
+          </div>
+          <p class="text-xs text-indigo-200/80 mt-1">Automação total com IA e importação bancária.</p>
+          
+          <div class="mt-4 mb-6">
+            <div class="flex items-baseline gap-1">
+              <span id="price-pro-val" class="text-3xl font-black text-white">R$ 199,00</span>
+              <span id="price-pro-unit" class="text-xs text-indigo-200">/ano</span>
+            </div>
+            <p id="price-pro-sub" class="text-[11px] text-amber-300 font-semibold mt-0.5">Equivalente a R$ 16,58/mês (45% OFF)</p>
+          </div>
+
+          <ul class="space-y-2.5 text-xs text-slate-200">
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> <b>Tudo do plano Starter</b></li>
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> <b>Contas bancárias ilimitadas</b></li>
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> <b>Importação Inteligente de Extratos (OFX/CSV)</b></li>
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> <b>Auto-Categorização com IA e Memória</b></li>
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> <b>Assistente de Saúde Financeira & Poupança</b></li>
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i> Suporte prioritário</li>
+          </ul>
+        </div>
+
+        <button onclick="document.getElementById('tab-btn-register').click(); window.scrollTo({top: 0, behavior: 'smooth'});" class="mt-6 w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/40 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2">
+          <span>Iniciar 7 Dias Grátis</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+    </div>
+  </section>
+
   <!-- Rodapé -->
-  <footer class="py-4 text-center text-xs text-slate-500 dark:text-slate-400 relative z-10">
+  <footer class="py-6 text-center text-xs text-slate-500 dark:text-slate-400 relative z-10 border-t border-slate-200 dark:border-slate-800/80">
     FinFlow &bull; Sistema de Gestão Financeira Pessoal Inteligente
   </footer>
 
@@ -198,6 +332,43 @@
   <script>
     // Configuração do Google Client ID (injetada pelo Flask ou via API)
     const GOOGLE_CLIENT_ID = "{{ google_client_id | default('') }}";
+
+    function setBillingCycle(cycle) {
+      const btnMensal = document.getElementById('toggle-pricing-mensal');
+      const btnAnual = document.getElementById('toggle-pricing-anual');
+      
+      const starterVal = document.getElementById('price-starter-val');
+      const starterUnit = document.getElementById('price-starter-unit');
+      const starterSub = document.getElementById('price-starter-sub');
+
+      const proVal = document.getElementById('price-pro-val');
+      const proUnit = document.getElementById('price-pro-unit');
+      const proSub = document.getElementById('price-pro-sub');
+
+      if (cycle === 'anual') {
+        btnAnual.className = 'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-600/30 flex items-center gap-1.5';
+        btnMensal.className = 'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition text-slate-600 dark:text-slate-400';
+        
+        if (starterVal) starterVal.textContent = 'R$ 99,00';
+        if (starterUnit) starterUnit.textContent = '/ano';
+        if (starterSub) starterSub.textContent = 'Equivalente a R$ 8,25/mês (45% OFF)';
+
+        if (proVal) proVal.textContent = 'R$ 199,00';
+        if (proUnit) proUnit.textContent = '/ano';
+        if (proSub) proSub.textContent = 'Equivalente a R$ 16,58/mês (45% OFF)';
+      } else {
+        btnMensal.className = 'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-600/30 flex items-center gap-1.5';
+        btnAnual.className = 'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition text-slate-600 dark:text-slate-400';
+
+        if (starterVal) starterVal.textContent = 'R$ 14,90';
+        if (starterUnit) starterUnit.textContent = '/mês';
+        if (starterSub) starterSub.textContent = 'Cobrança mensal flexível';
+
+        if (proVal) proVal.textContent = 'R$ 29,90';
+        if (proUnit) proUnit.textContent = '/mês';
+        if (proSub) proSub.textContent = 'Cobrança mensal flexível';
+      }
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
       initLoginTheme();

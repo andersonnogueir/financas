@@ -5,7 +5,7 @@ import json
 import re
 import base64
 from functools import wraps
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from flask import Flask, render_template, request, jsonify, Response, redirect, url_for, session
 from werkzeug.security import check_password_hash
@@ -194,6 +194,121 @@ def login_required(f):
 
         return f(*args, **kwargs)
     return decorated_function
+
+# ==========================================
+# MODELO SAAS: CONFIGURAÇÃO DE PLANOS & TIERS
+# ==========================================
+
+PLANOS_CONFIG = {
+    'free': {
+        'id': 'free',
+        'nome': 'Freemium (Grátis)',
+        'max_contas': 2,
+        'max_transacoes_mes': 25,
+        'can_export': False,
+        'can_import_ofx': False,
+        'has_ai_insights': True,
+        'preco_mensal': 0.0,
+        'preco_anual': 0.0,
+        'descricao': 'Ideal para conhecer e dar os primeiros passos'
+    },
+    'starter': {
+        'id': 'starter',
+        'nome': 'Starter / MVP',
+        'max_contas': 10,
+        'max_transacoes_mes': 999999,
+        'can_export': True,
+        'can_import_ofx': False,
+        'has_ai_insights': True,
+        'preco_mensal': 14.90,
+        'preco_anual': 99.00,
+        'descricao': 'Substituto definitivo de planilhas com exportação completa'
+    },
+    'pro': {
+        'id': 'pro',
+        'nome': 'Padrão PRO',
+        'max_contas': 999999,
+        'max_transacoes_mes': 999999,
+        'can_export': True,
+        'can_import_ofx': True,
+        'has_ai_insights': True,
+        'preco_mensal': 29.90,
+        'preco_anual': 199.00,
+        'descricao': 'Automação total com Importação Inteligente (OFX/CSV) e IA'
+    },
+    'family': {
+        'id': 'family',
+        'nome': 'Família / MEI',
+        'max_contas': 999999,
+        'max_transacoes_mes': 999999,
+        'can_export': True,
+        'can_import_ofx': True,
+        'has_ai_insights': True,
+        'preco_mensal': 49.90,
+        'preco_anual': 349.00,
+        'descricao': 'Múltiplos perfis, gestão familiar e relatórios IRPF/PJ'
+    }
+}
+
+def get_user_plan_context(user_id):
+    plan_info = database.get_user_plan_details(user_id)
+    if not plan_info:
+        plan_info = {
+            "plano": "free",
+            "plano_status": "active",
+            "is_trial": False,
+            "dias_restantes_trial": 0
+        }
+    
+    plano_key = plan_info.get("plano") or "free"
+    status = plan_info.get("plano_status") or "active"
+
+    # Se estiver em trial de 7 dias, concede acesso total do plano PRO
+    if plan_info.get("is_trial"):
+        config = PLANOS_CONFIG.get("pro").copy()
+        config["is_trial"] = True
+        config["dias_restantes_trial"] = plan_info.get("dias_restantes_trial", 0)
+    elif status == "active":
+        config = PLANOS_CONFIG.get(plano_key, PLANOS_CONFIG["free"]).copy()
+        config["is_trial"] = False
+        config["dias_restantes_trial"] = 0
+    else:
+        # Expirado, cancelado ou plano free
+        config = PLANOS_CONFIG["free"].copy()
+        config["is_trial"] = False
+        config["dias_restantes_trial"] = 0
+
+    stats = database.get_user_usage_stats(user_id)
+
+    can_create_conta = stats["total_contas"] < config["max_contas"]
+    can_create_transacao = stats["total_transacoes_mes"] < config["max_transacoes_mes"]
+
+    return {
+        "user_id": user_id,
+        "plano": plano_key,
+        "plano_nome": config["nome"],
+        "plano_status": status,
+        "is_trial": config.get("is_trial", False),
+        "dias_restantes_trial": config.get("dias_restantes_trial", 0),
+        "trial_fim": plan_info.get("trial_fim"),
+        "plano_periodo": plan_info.get("plano_periodo", "mensal"),
+        "limites": {
+            "max_contas": config["max_contas"],
+            "max_transacoes_mes": config["max_transacoes_mes"],
+            "can_export": config["can_export"],
+            "can_import_ofx": config["can_import_ofx"]
+        },
+        "uso": {
+            "total_contas": stats["total_contas"],
+            "total_transacoes_mes": stats["total_transacoes_mes"]
+        },
+        "permissoes": {
+            "can_create_conta": can_create_conta,
+            "can_create_transacao": can_create_transacao,
+            "can_export": config["can_export"],
+            "can_import_ofx": config["can_import_ofx"]
+        }
+    }
 
 # ==========================================
 # ROTAS DE PÁGINAS (FRONTEND)
@@ -404,13 +519,24 @@ def auth_me():
         session.clear()
         return jsonify({"authenticated": False}), 401
 
+    plan_ctx = get_user_plan_context(user['id'])
+
     return jsonify({
         "authenticated": True,
         "user": {
             "id": user['id'],
             "nome": user['nome'],
             "email": user['email'],
-            "avatar_url": user.get('avatar_url') or ''
+            "avatar_url": user.get('avatar_url') or '',
+            "plano": plan_ctx['plano'],
+            "plano_nome": plan_ctx['plano_nome'],
+            "plano_status": plan_ctx['plano_status'],
+            "is_trial": plan_ctx['is_trial'],
+            "dias_restantes_trial": plan_ctx['dias_restantes_trial'],
+            "trial_fim": plan_ctx['trial_fim'],
+            "limites": plan_ctx['limites'],
+            "uso": plan_ctx['uso'],
+            "permissoes": plan_ctx['permissoes']
         }
     })
 
@@ -678,6 +804,15 @@ def list_contas():
 @login_required
 def create_conta():
     user_id = session['user_id']
+    plan_ctx = get_user_plan_context(user_id)
+    if not plan_ctx['permissoes']['can_create_conta']:
+        return jsonify({
+            "error": f"Você atingiu o limite de {plan_ctx['limites']['max_contas']} contas do plano gratuito. Faça upgrade para o plano Starter ou PRO para cadastrar mais contas.",
+            "upgrade_required": True,
+            "recurso": "contas",
+            "limite": plan_ctx['limites']['max_contas']
+        }), 403
+
     data = request.get_json() or {}
     nome = data.get("nome", "").strip()
     if not nome:
@@ -858,6 +993,15 @@ def list_transacoes():
 @login_required
 def create_transacao():
     user_id = session['user_id']
+    plan_ctx = get_user_plan_context(user_id)
+    if not plan_ctx['permissoes']['can_create_transacao']:
+        return jsonify({
+            "error": f"Você atingiu o limite de {plan_ctx['limites']['max_transacoes_mes']} lançamentos mensais do plano gratuito. Faça upgrade para o plano Starter ou PRO para lançamentos ilimitados.",
+            "upgrade_required": True,
+            "recurso": "transacoes",
+            "limite": plan_ctx['limites']['max_transacoes_mes']
+        }), 403
+
     data = request.get_json() or {}
     tipo = data.get("tipo", "despesa")
     descricao = data.get("descricao", "").strip()
@@ -983,6 +1127,13 @@ def zerar_mes_transacoes():
 def import_preview():
     """Recebe o arquivo bancário e gera prévia com auto-categorização inteligente."""
     user_id = session['user_id']
+    plan_ctx = get_user_plan_context(user_id)
+    if not plan_ctx['permissoes']['can_import_ofx']:
+        return jsonify({
+            "error": "A Importação Inteligente de Extratos (OFX/CSV) com Auto-Categorização por IA é exclusiva do plano Padrão PRO.",
+            "upgrade_required": True,
+            "recurso": "import_ofx"
+        }), 403
 
     if 'arquivo' not in request.files:
         return jsonify({"error": "Nenhum arquivo enviado"}), 400
@@ -1068,6 +1219,14 @@ def import_preview():
 def import_confirm():
     """Grava as transações confirmadas pelo usuário e memoriza novas regras de categorização."""
     user_id = session['user_id']
+    plan_ctx = get_user_plan_context(user_id)
+    if not plan_ctx['permissoes']['can_import_ofx']:
+        return jsonify({
+            "error": "A Importação Inteligente de Extratos (OFX/CSV) com Auto-Categorização por IA é exclusiva do plano Padrão PRO.",
+            "upgrade_required": True,
+            "recurso": "import_ofx"
+        }), 403
+
     data = request.get_json() or {}
     conta_id = data.get("conta_id")
     transacoes = data.get("transacoes", [])
@@ -1316,6 +1475,14 @@ def create_categoria():
 @login_required
 def export_csv():
     user_id = session['user_id']
+    plan_ctx = get_user_plan_context(user_id)
+    if not plan_ctx['permissoes']['can_export']:
+        return jsonify({
+            "error": "A exportação completa de extratos em CSV/Excel é um recurso exclusivo dos planos Starter e PRO.",
+            "upgrade_required": True,
+            "recurso": "export"
+        }), 403
+
     mes = request.args.get("mes")
     ano = request.args.get("ano")
 
@@ -1374,6 +1541,140 @@ def export_csv():
         mimetype="text/csv; charset=utf-8",
         headers={"Content-Disposition": f"attachment;filename={filename}"}
     )
+
+# ==========================================
+# APIS DE ASSINATURA & WEBHOOKS SAAS
+# ==========================================
+
+@app.route("/pricing")
+def pricing_page():
+    return render_template("login.html", google_client_id=GOOGLE_CLIENT_ID, tab="pricing")
+
+@app.route("/api/subscription/status", methods=["GET"])
+@login_required
+def subscription_status():
+    user_id = session['user_id']
+    plan_ctx = get_user_plan_context(user_id)
+    return jsonify({
+        "status": "success",
+        "subscription": plan_ctx,
+        "planos_disponiveis": PLANOS_CONFIG
+    })
+
+@app.route("/api/subscription/checkout", methods=["POST"])
+@login_required
+def subscription_checkout():
+    user_id = session['user_id']
+    data = request.get_json() or {}
+    plano = data.get("plano", "pro").lower()
+    periodo = data.get("periodo", "mensal").lower()
+    gateway = data.get("gateway", "stripe").lower()
+    metodo = data.get("metodo", "cartao").lower()
+
+    if plano not in PLANOS_CONFIG or plano == 'free':
+        return jsonify({"error": "Plano inválido selecionado"}), 400
+
+    cfg = PLANOS_CONFIG[plano]
+    valor = cfg['preco_anual'] if periodo == 'anual' else cfg['preco_mensal']
+    dias_validade = 365 if periodo == 'anual' else 30
+    expira_em = (datetime.now() + timedelta(days=dias_validade)).strftime('%Y-%m-%d %H:%M:%S')
+
+    customer_id = f"cus_{user_id}_{int(datetime.now().timestamp())}"
+    subscription_id = f"sub_{plano}_{periodo}_{int(datetime.now().timestamp())}"
+
+    # Ativação imediata da assinatura
+    database.update_user_plan(
+        user_id=user_id,
+        plano=plano,
+        plano_status='active',
+        plano_periodo=periodo,
+        gateway=gateway,
+        customer_id=customer_id,
+        subscription_id=subscription_id,
+        plano_expira_em=expira_em
+    )
+
+    # Log do evento no histórico
+    database.log_subscription_event(
+        user_id=user_id,
+        gateway=gateway,
+        event_type="checkout.session.completed",
+        plano=plano,
+        valor=valor,
+        status="active",
+        payload=json.dumps({"periodo": periodo, "metodo": metodo, "valor": valor, "subscription_id": subscription_id})
+    )
+
+    return jsonify({
+        "success": True,
+        "message": f"Parabéns! Sua assinatura do plano {cfg['nome']} ({periodo.capitalize()}) foi ativada com sucesso.",
+        "plano": plano,
+        "plano_nome": cfg['nome'],
+        "periodo": periodo,
+        "valor": valor,
+        "expira_em": expira_em
+    })
+
+@app.route("/api/subscription/webhook", methods=["POST"])
+@app.route("/api/subscription/webhook/stripe", methods=["POST"])
+@app.route("/api/subscription/webhook/asaas", methods=["POST"])
+def subscription_webhook():
+    """Webhook universal para Stripe, Asaas e Mercado Pago."""
+    data = request.get_json(silent=True) or {}
+    event_type = data.get("type") or data.get("event") or "PAYMENT_RECEIVED"
+    
+    customer_id = (
+        data.get("data", {}).get("object", {}).get("customer") or 
+        data.get("payment", {}).get("customer") or 
+        data.get("customer") or
+        request.headers.get("X-Customer-Id")
+    )
+    user_id = data.get("user_id") or data.get("data", {}).get("object", {}).get("metadata", {}).get("user_id")
+
+    conn = database.get_connection()
+    cursor = conn.cursor()
+
+    if not user_id and customer_id:
+        cursor.execute("SELECT id FROM usuarios WHERE customer_id = ?", (str(customer_id),))
+        row = cursor.fetchone()
+        if row:
+            user_id = row['id'] if isinstance(row, dict) or hasattr(row, 'keys') else row[0]
+
+    if not user_id:
+        conn.close()
+        return jsonify({"received": True, "status": "ignored_no_user"}), 200
+
+    plano = data.get("plano") or data.get("data", {}).get("object", {}).get("metadata", {}).get("plano") or "pro"
+    periodo = data.get("periodo") or "mensal"
+    gateway = "stripe" if "stripe" in request.path else ("asaas" if "asaas" in request.path else "gateway")
+
+    if event_type in ["checkout.session.completed", "invoice.paid", "PAYMENT_RECEIVED", "PAYMENT_CONFIRMED", "SUBSCRIPTION_RENEWED"]:
+        dias = 365 if periodo == "anual" else 30
+        expira_em = (datetime.now() + timedelta(days=dias)).strftime('%Y-%m-%d %H:%M:%S')
+        database.update_user_plan(user_id, plano=plano, plano_status='active', plano_periodo=periodo, gateway=gateway, plano_expira_em=expira_em)
+        database.log_subscription_event(user_id, gateway, event_type, plano=plano, status='active', payload=json.dumps(data))
+    elif event_type in ["customer.subscription.deleted", "SUBSCRIPTION_CANCELED", "PAYMENT_REFUNDED"]:
+        database.update_user_plan(user_id, plano='free', plano_status='canceled')
+        database.log_subscription_event(user_id, gateway, event_type, plano='free', status='canceled', payload=json.dumps(data))
+    elif event_type in ["invoice.payment_failed", "PAYMENT_OVERDUE"]:
+        database.update_user_plan(user_id, plano='free', plano_status='past_due')
+        database.log_subscription_event(user_id, gateway, event_type, plano='free', status='past_due', payload=json.dumps(data))
+    else:
+        database.log_subscription_event(user_id, gateway, event_type, plano=plano, status='info', payload=json.dumps(data))
+
+    conn.close()
+    return jsonify({"received": True, "event": event_type, "status": "processed"})
+
+@app.route("/api/subscription/cancel", methods=["POST"])
+@login_required
+def subscription_cancel():
+    user_id = session['user_id']
+    database.update_user_plan(user_id, plano='free', plano_status='canceled')
+    database.log_subscription_event(user_id, 'manual', 'customer_self_cancel', plano='free', status='canceled')
+    return jsonify({
+        "success": True,
+        "message": "Sua assinatura foi cancelada. Sua conta continuará com acesso aos recursos gratuitos (Freemium)."
+    })
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
