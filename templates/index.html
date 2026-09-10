@@ -93,63 +93,90 @@
           </button>
         </div>
 
-        <!-- Ações do Topo e Perfil do Usuário -->
-        <div class="flex items-center gap-1.5 sm:gap-3 shrink-0">
-          <!-- Badge do Plano & Assinatura (Clique para Gerenciar / Upgrade) -->
-          <button id="btn-open-modal-planos" title="Gerenciar Assinatura ou Fazer Upgrade" class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-xl bg-gradient-to-r from-indigo-500/15 via-purple-500/15 to-pink-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shadow-sm transition transform hover:-translate-y-0.5">
-            <i data-lucide="crown" class="w-3.5 h-3.5 text-amber-500"></i>
-            <span id="badge-plano-nome">PRO</span>
-            <span id="badge-plano-tag" class="hidden text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30">7d Trial</span>
+        <!-- Ações do Topo e Menu do Usuário (Design Limpo & Moderno) -->
+        <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+          
+          <!-- Botão Importar Extrato (Desktop) -->
+          <button id="btn-open-modal-import" title="Importar extrato bancário com IA (OFX, CSV)" class="hidden md:flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50/80 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 border border-indigo-200/70 dark:border-indigo-800/70 rounded-xl shadow-sm transition transform hover:-translate-y-0.5">
+            <i data-lucide="file-up" class="w-3.5 h-3.5 text-indigo-500"></i>
+            <span>Importar Extrato</span>
+            <span class="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-indigo-600 text-white">IA</span>
           </button>
 
-          <!-- Guia do Sistema / Tour Passo a Passo -->
-          <button id="btn-open-tour" onclick="openTourModal(1)" title="Guia do Sistema & Passo a Passo das Funcionalidades" class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold rounded-xl bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 shadow-sm transition transform hover:-translate-y-0.5">
-            <i data-lucide="help-circle" class="w-3.5 h-3.5 text-indigo-500"></i>
-            <span class="hidden xl:inline">Guia do Sistema</span>
+          <!-- Botão Novo Lançamento (Destaque Principal) -->
+          <button id="btn-open-modal-lancamento" class="flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-md shadow-indigo-600/30 transition transform hover:-translate-y-0.5">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+            <span>Novo Lançamento</span>
+            <span class="hidden sm:inline-block text-[10px] bg-indigo-700/80 px-1.5 py-0.5 rounded border border-indigo-400/30">N</span>
           </button>
 
-          <!-- Alternar Tema -->
-          <button id="btn-toggle-theme" title="Alternar Modo Escuro/Claro" class="p-2 sm:p-2.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/60 dark:border-slate-700/60 transition">
-            <i id="theme-icon" data-lucide="sun" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
-          </button>
-
-          <!-- Botões Desktop (hidden no mobile) -->
-          <div class="hidden md:flex items-center gap-2">
-            <!-- Botão Importar Extrato Bancário Inteligente -->
-            <button id="btn-open-modal-import" title="Importar arquivo bancário (OFX, CSV, TXT)" class="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 border border-indigo-200/80 dark:border-indigo-800/80 rounded-xl shadow-sm transition transform hover:-translate-y-0.5">
-              <i data-lucide="file-up" class="w-4 h-4 text-indigo-500"></i>
-              <span>Importar Extrato</span>
-              <span class="inline-flex items-center px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-indigo-600 text-white">IA</span>
+          <!-- Perfil do Usuário com Menu Dropdown Compacto -->
+          <div class="relative" id="user-menu-container">
+            <button id="btn-user-menu-toggle" onclick="toggleUserMenu()" class="flex items-center gap-2 p-1 sm:p-1.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800/80 transition border border-transparent hover:border-slate-200 dark:hover:border-slate-700">
+              <img id="user-avatar-img" src="https://ui-avatars.com/api/?name=User&background=6366f1&color=fff" class="w-8 h-8 rounded-full border border-slate-300 dark:border-slate-700 object-cover shadow-sm" alt="Avatar">
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 transition-transform duration-200" id="user-menu-chevron"></i>
             </button>
 
-            <!-- Exportar CSV -->
-            <a id="btn-export-csv" href="/api/export/csv" title="Exportar Extrato em CSV / Excel" class="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100/80 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 rounded-xl transition border border-slate-200/60 dark:border-slate-700/60">
-              <i data-lucide="download" class="w-3.5 h-3.5"></i>
-              <span>Exportar</span>
-            </a>
-
-            <!-- Botão Novo Lançamento -->
-            <button id="btn-open-modal-lancamento" class="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-md shadow-indigo-600/30 transition transform hover:-translate-y-0.5">
-              <i data-lucide="plus-circle" class="w-4 h-4"></i>
-              <span>Novo Lançamento</span>
-              <span class="text-[10px] bg-indigo-700/80 px-1.5 py-0.5 rounded border border-indigo-400/30">N</span>
-            </button>
-          </div>
-
-          <!-- Perfil do Usuário & Logout -->
-          <div class="flex items-center pl-1.5 sm:pl-2 border-l border-slate-200 dark:border-slate-800 gap-1.5 sm:gap-2">
-            <div class="flex items-center gap-2">
-              <img id="user-avatar-img" src="https://ui-avatars.com/api/?name=User&background=6366f1&color=fff" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-slate-300 dark:border-slate-700 object-cover shadow-sm" alt="Avatar">
-              <div class="hidden lg:block text-left">
-                <p id="user-nome-label" class="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">Usuário</p>
-                <p id="user-email-label" class="text-[10px] text-slate-400 leading-tight truncate max-w-[110px]">user@exemplo.com</p>
+            <!-- Dropdown Menu Flutuante -->
+            <div id="user-menu-dropdown" class="hidden absolute right-0 mt-2 w-64 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl z-50 py-2 divide-y divide-slate-100 dark:divide-slate-800/80 fade-in">
+              
+              <!-- Info do Usuário -->
+              <div class="px-4 py-2.5">
+                <p id="user-nome-label" class="text-xs font-bold text-slate-900 dark:text-white truncate">Usuário</p>
+                <p id="user-email-label" class="text-[11px] text-slate-500 dark:text-slate-400 truncate">user@exemplo.com</p>
               </div>
+
+              <!-- Card de Assinatura / Plano no Menu -->
+              <div class="p-2">
+                <button id="btn-open-modal-planos" onclick="openModalPlanos(); toggleUserMenu(false);" class="w-full text-left p-2.5 rounded-xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 hover:from-indigo-500/20 hover:to-pink-500/20 border border-indigo-200/80 dark:border-indigo-800/80 transition flex items-center justify-between group">
+                  <div class="flex items-center gap-2">
+                    <i data-lucide="crown" class="w-4 h-4 text-amber-500"></i>
+                    <div>
+                      <p class="text-[11px] font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                        Plano <span id="badge-plano-nome">PRO</span>
+                      </p>
+                      <p id="badge-plano-tag" class="text-[10px] text-amber-600 dark:text-amber-400">7d Trial ativo</p>
+                    </div>
+                  </div>
+                  <span class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 group-hover:translate-x-0.5 transition">Gerenciar</span>
+                </button>
+              </div>
+
+              <!-- Links & Ações Secundárias -->
+              <div class="py-1">
+                <!-- Guia do Sistema -->
+                <button onclick="openTourModal(1); toggleUserMenu(false);" class="w-full px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60 flex items-center gap-2.5 transition">
+                  <i data-lucide="help-circle" class="w-4 h-4 text-indigo-500"></i>
+                  <span>Guia do Sistema (Passo a Passo)</span>
+                </button>
+
+                <!-- Exportar Extrato CSV -->
+                <a id="btn-export-csv" href="/api/export/csv" class="w-full px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60 flex items-center gap-2.5 transition">
+                  <i data-lucide="download" class="w-4 h-4 text-slate-400"></i>
+                  <span>Exportar Extrato (CSV / Excel)</span>
+                </a>
+
+                <!-- Alternar Tema -->
+                <button id="btn-toggle-theme" onclick="toggleTheme()" class="w-full px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60 flex items-center justify-between transition">
+                  <div class="flex items-center gap-2.5">
+                    <i id="theme-icon" data-lucide="sun" class="w-4 h-4 text-amber-500"></i>
+                    <span>Modo Escuro / Claro</span>
+                  </div>
+                  <span class="text-[10px] text-slate-400">Alternar</span>
+                </button>
+              </div>
+
+              <!-- Sair da Conta -->
+              <div class="py-1">
+                <button id="btn-logout" class="w-full px-4 py-2 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2.5 transition">
+                  <i data-lucide="log-out" class="w-4 h-4"></i>
+                  <span>Sair da Conta</span>
+                </button>
+              </div>
+
             </div>
-            
-            <button id="btn-logout" title="Sair da Conta (Logout)" class="p-1.5 sm:p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition">
-              <i data-lucide="log-out" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
-            </button>
           </div>
+
         </div>
 
       </div>

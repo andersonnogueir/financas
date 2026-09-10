@@ -2497,6 +2497,14 @@ function setupEventListeners() {
     }
   });
 
+  // Fechar dropdown de usuário ao clicar fora
+  window.addEventListener('click', (e) => {
+    const userContainer = document.getElementById('user-menu-container');
+    if (userContainer && !userContainer.contains(e.target)) {
+      toggleUserMenu(false);
+    }
+  });
+
   // Atalhos de Teclado
   window.addEventListener('keydown', (e) => {
     const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
@@ -2510,9 +2518,28 @@ function setupEventListeners() {
       }
     } else if (e.key === 'Escape') {
       closeAllModals();
+      toggleUserMenu(false);
     }
   });
 }
+
+function toggleUserMenu(show = null) {
+  const menu = document.getElementById('user-menu-dropdown');
+  const chevron = document.getElementById('user-menu-chevron');
+  if (!menu) return;
+
+  const isCurrentlyOpen = !menu.classList.contains('hidden');
+  const shouldOpen = show !== null ? show : !isCurrentlyOpen;
+
+  if (shouldOpen) {
+    menu.classList.remove('hidden');
+    if (chevron) chevron.style.transform = 'rotate(180deg)';
+  } else {
+    menu.classList.add('hidden');
+    if (chevron) chevron.style.transform = 'rotate(0deg)';
+  }
+}
+window.toggleUserMenu = toggleUserMenu;
 
 // ========================================================
 // PAINEL MASTER / GESTÃO SAAS DO GERENTE (ADMIN)
