@@ -276,13 +276,11 @@ class TestFinFlowBankImport(unittest.TestCase):
         self.assertIn('sugestoes', insights)
         self.assertGreater(len(insights['sugestoes']), 0)
 
-        # Validar dados dos 4 gráficos
+        # Validar dados dos gráficos objetivos
         self.assertIn('despesas_por_categoria', data)
         self.assertIn('historico_meses', data)
-        self.assertIn('top_despesas', data)
         self.assertIn('despesas_diarias', data)
-        self.assertIsInstance(data['top_despesas'], list)
-        print("OK: Motor de IA de Insights Financeiros e dados dos 4 graficos (com Top Despesas) validados com sucesso!")
+        print("OK: Motor de IA de Insights Financeiros e graficos objetivos validados com sucesso!")
 
 if __name__ == '__main__':
     unittest.main()

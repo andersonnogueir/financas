@@ -27,7 +27,6 @@ const state = {
   charts: {
     categorias: null,
     historico: null,
-    topDespesas: null,
     gastosDiarios: null
   }
 };
@@ -358,7 +357,6 @@ async function loadDashboard() {
     renderInsightsIA(data.insights_ia, data.despesas_por_categoria);
     renderChartCategorias(data.despesas_por_categoria);
     renderChartHistorico(data.historico_meses);
-    renderChartTopDespesas(data.top_despesas);
     renderChartGastosDiarios(data.despesas_diarias);
     renderAlertas(data.alertas);
 
@@ -620,104 +618,7 @@ function renderChartHistorico(historico) {
   }
 }
 
-function renderChartTopDespesas(topDespesas) {
-  const ctx = document.getElementById('chart-top-despesas');
-  const emptyMsg = document.getElementById('chart-top-despesas-empty');
-  if (!ctx) return;
 
-  if (state.charts.topDespesas) {
-    try { state.charts.topDespesas.destroy(); } catch (e) {}
-  }
-
-  if (typeof Chart === 'undefined') {
-    return;
-  }
-
-  if (!topDespesas || topDespesas.length === 0) {
-    ctx.style.display = 'none';
-    if (emptyMsg) emptyMsg.classList.remove('hidden');
-    return;
-  }
-
-  ctx.style.display = 'block';
-  if (emptyMsg) emptyMsg.classList.add('hidden');
-
-  const isDark = document.documentElement.classList.contains('dark');
-  const labels = topDespesas.map(d => {
-    const desc = d.descricao || 'Sem descrição';
-    return desc.length > 20 ? desc.substring(0, 18) + '...' : desc;
-  });
-  const dataValues = topDespesas.map(d => d.valor);
-  const bgColors = topDespesas.map(d => d.categoria_cor || '#f43f5e');
-
-  try {
-    state.charts.topDespesas = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [{
-          label: 'Valor da Despesa',
-          data: dataValues,
-          backgroundColor: bgColors,
-          borderRadius: 6,
-          barPercentage: 0.6
-        }]
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: isDark ? '#1e293b' : '#ffffff',
-            titleColor: isDark ? '#f8fafc' : '#0f172a',
-            bodyColor: isDark ? '#cbd5e1' : '#475569',
-            borderColor: isDark ? '#334155' : '#e2e8f0',
-            borderWidth: 1,
-            padding: 10,
-            callbacks: {
-              title: function(context) {
-                const idx = context[0].dataIndex;
-                return topDespesas[idx].descricao || 'Despesa';
-              },
-              label: function(context) {
-                const idx = context.dataIndex;
-                const item = topDespesas[idx];
-                const dt = item.data ? formatDateBR(item.data) : '';
-                const cat = item.categoria_nome || 'Sem categoria';
-                return [
-                  ` Valor: ${formatBRL(item.valor)}`,
-                  ` Categoria: ${cat}`,
-                  dt ? ` Data: ${dt}` : ''
-                ].filter(Boolean);
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            grid: { color: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' },
-            ticks: {
-              color: isDark ? '#94a3b8' : '#64748b',
-              font: { size: 10, family: 'Inter' },
-              callback: function(value) { return 'R$ ' + value.toLocaleString('pt-BR'); }
-            }
-          },
-          y: {
-            grid: { display: false },
-            ticks: {
-              color: isDark ? '#cbd5e1' : '#334155',
-              font: { size: 11, family: 'Inter', weight: 600 }
-            }
-          }
-        }
-      }
-    });
-  } catch (err) {
-    console.error('Erro ao renderizar gráfico de maiores despesas:', err);
-  }
-}
 
 function renderChartGastosDiarios(despesasDiarias) {
   const ctx = document.getElementById('chart-gastos-diarios');

@@ -358,7 +358,7 @@
         </div>
       </div>
 
-      <!-- SEÇÃO DE 4 GRÁFICOS FINANCEIROS AVANÇADOS -->
+      <!-- SEÇÃO DE GRÁFICOS FINANCEIROS OBJETIVOS -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         
         <!-- Gráfico 1: Despesas por Categoria (Rosca) -->
@@ -392,42 +392,24 @@
           </div>
         </div>
 
-        <!-- Gráfico 3: Maiores Despesas do Mês (Top 5 - Dados Reais) -->
-        <div class="bg-white dark:bg-slate-900/90 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col justify-between">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <i data-lucide="award" class="w-4 h-4 text-rose-500"></i>
-              Maiores Despesas do Mês (Top 5)
-            </h3>
-            <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">Dados Reais</span>
-          </div>
-          <div class="relative flex-1 flex items-center justify-center min-h-[260px]">
-            <canvas id="chart-top-despesas"></canvas>
-            <div id="chart-top-despesas-empty" class="hidden absolute inset-0 flex flex-col items-center justify-center text-center p-4">
-              <i data-lucide="receipt" class="w-8 h-8 text-slate-400 mb-2"></i>
-              <p class="text-xs text-slate-500 dark:text-slate-400">Nenhuma despesa registrada neste mês.</p>
-            </div>
+      </div>
+
+      <!-- Gráfico 3: Ritmo de Gastos Diários no Mês (Linha do Tempo) -->
+      <div class="bg-white dark:bg-slate-900/90 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <i data-lucide="calendar" class="w-4 h-4 text-rose-500"></i>
+            Ritmo de Gastos Diários no Mês (Dias com Picos)
+          </h3>
+          <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">Mês Atual</span>
+        </div>
+        <div class="relative min-h-[220px]">
+          <canvas id="chart-gastos-diarios"></canvas>
+          <div id="chart-diarios-empty" class="hidden absolute inset-0 flex flex-col items-center justify-center text-center p-4">
+            <i data-lucide="activity" class="w-8 h-8 text-slate-400 mb-2"></i>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Sem despesas diárias neste mês.</p>
           </div>
         </div>
-
-        <!-- Gráfico 4: Ritmo de Gastos Diários no Mês (Linha do Tempo) -->
-        <div class="bg-white dark:bg-slate-900/90 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col justify-between">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <i data-lucide="calendar" class="w-4 h-4 text-rose-500"></i>
-              Ritmo de Gastos Diários (Dias com Picos)
-            </h3>
-            <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">Mês Atual</span>
-          </div>
-          <div class="relative flex-1 flex items-center justify-center min-h-[260px]">
-            <canvas id="chart-gastos-diarios"></canvas>
-            <div id="chart-diarios-empty" class="hidden absolute inset-0 flex flex-col items-center justify-center text-center p-4">
-              <i data-lucide="activity" class="w-8 h-8 text-slate-400 mb-2"></i>
-              <p class="text-xs text-slate-500 dark:text-slate-400">Sem despesas diárias neste mês.</p>
-            </div>
-          </div>
-        </div>
-
       </div>
 
       <!-- SEÇÃO COMPACTA: ALERTAS & CONTAS A VENCER NOS PRÓXIMOS 7 DIAS -->
