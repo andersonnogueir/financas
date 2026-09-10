@@ -1814,7 +1814,7 @@ function renderContasTab() {
         </div>
         <p class="text-sm font-bold text-slate-800 dark:text-slate-200">Você ainda não possui contas bancárias cadastradas</p>
         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Cadastre seus bancos ou carteira em dinheiro para gerenciar saldos e transferências.</p>
-        <button onclick="document.getElementById('btn-nova-conta-tab').click()" class="mt-4 px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow-md shadow-indigo-600/30">
+        <button onclick="abrirModalConta()" class="mt-4 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold shadow-md shadow-indigo-600/30 transition transform hover:-translate-y-0.5 cursor-pointer">
           + Cadastrar Minha Primeira Conta
         </button>
       </div>
@@ -2017,23 +2017,120 @@ async function excluirRegraAprendida(id) {
 }
 
 // ========================================================
+// ========================================================
 // CONTROLE DE MODAIS E FORMULÁRIOS
 // ========================================================
 function openModal(modalId) {
   const modal = document.getElementById(modalId);
   if (modal) modal.classList.remove('hidden');
 }
+window.openModal = openModal;
 
 function closeModal(modalId) {
   const modal = document.getElementById(modalId);
   if (modal) modal.classList.add('hidden');
 }
+window.closeModal = closeModal;
 
 function closeAllModals() {
   document.querySelectorAll('.modal-backdrop').forEach(modal => {
     modal.classList.add('hidden');
   });
 }
+window.closeAllModals = closeAllModals;
+
+// Funções Universais de Abertura de Modais
+function abrirModalConta(id = null) {
+  if (id) {
+    editarConta(id);
+    return;
+  }
+  const form = document.getElementById('form-conta');
+  if (form) form.reset();
+  const titulo = document.getElementById('modal-conta-titulo');
+  if (titulo) titulo.textContent = 'Nova Conta Bancária';
+  const idEl = document.getElementById('conta-id');
+  if (idEl) idEl.value = '';
+  const corEl = document.getElementById('conta-cor');
+  if (corEl) corEl.value = '#3b82f6';
+  const corLabel = document.getElementById('conta-cor-label');
+  if (corLabel) corLabel.textContent = '#3b82f6';
+  openModal('modal-conta');
+}
+window.abrirModalConta = abrirModalConta;
+
+function abrirModalLancamento() {
+  if (state.contas.length === 0) {
+    Swal.fire({
+      icon: 'info',
+      title: 'Cadastre uma Conta Primeiro',
+      text: 'Para fazer um lançamento, você precisa cadastrar pelo menos uma conta bancária ou carteira.',
+      confirmButtonText: 'Cadastrar Conta Agora',
+      confirmButtonColor: '#4f46e5'
+    }).then(() => {
+      abrirModalConta();
+    });
+    return;
+  }
+
+  const form = document.getElementById('form-lancamento');
+  if (form) form.reset();
+  const titulo = document.getElementById('modal-lancamento-titulo');
+  if (titulo) titulo.textContent = 'Novo Lançamento';
+  const idEl = document.getElementById('lancamento-id');
+  if (idEl) idEl.value = '';
+  const dataEl = document.getElementById('lancamento-data');
+  if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
+  setTipoLancamento('despesa');
+  openModal('modal-lancamento');
+}
+window.abrirModalLancamento = abrirModalLancamento;
+
+function abrirModalTransferencia() {
+  if (state.contas.length < 2) {
+    Swal.fire({
+      icon: 'info',
+      title: 'Necessário 2 Contas',
+      text: 'Você precisa ter pelo menos 2 contas cadastradas para realizar transferências entre elas.',
+      confirmButtonText: 'Cadastrar Segunda Conta',
+      confirmButtonColor: '#4f46e5'
+    }).then(() => {
+      abrirModalConta();
+    });
+    return;
+  }
+  const form = document.getElementById('form-transferencia-modal');
+  if (form) form.reset();
+  const dataEl = document.getElementById('transf-data');
+  if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
+  openModal('modal-transferencia');
+}
+window.abrirModalTransferencia = abrirModalTransferencia;
+
+function abrirModalRecorrencia() {
+  const form = document.getElementById('form-recorrencia');
+  if (form) form.reset();
+  const titulo = document.getElementById('modal-rec-titulo');
+  if (titulo) titulo.textContent = 'Nova Despesa / Receita Recorrente';
+  const idEl = document.getElementById('rec-id');
+  if (idEl) idEl.value = '';
+  const diaEl = document.getElementById('rec-dia');
+  if (diaEl) diaEl.value = '5';
+  const dataInicioEl = document.getElementById('rec-data-inicio');
+  if (dataInicioEl) dataInicioEl.value = new Date().toISOString().split('T')[0];
+  const dataFimEl = document.getElementById('rec-data-fim');
+  if (dataFimEl) dataFimEl.value = '';
+  setTipoRecorrencia('despesa');
+  openModal('modal-recorrencia');
+}
+window.abrirModalRecorrencia = abrirModalRecorrencia;
+
+function abrirModalCategoria() {
+  const form = document.getElementById('form-categoria');
+  if (form) form.reset();
+  openModal('modal-categoria');
+}
+window.abrirModalCategoria = abrirModalCategoria;
 
 function setTipoLancamento(tipo) {
   state.currentTipoLancamento = tipo;
@@ -2054,23 +2151,23 @@ function setTipoLancamento(tipo) {
   const lblContaOrigem = document.getElementById('lbl-conta-origem');
 
   if (tipo === 'despesa') {
-    btnDespesa.className = 'btn-tipo-transacao py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 bg-rose-600 text-white shadow-sm';
-    containerDestino.classList.add('hidden');
-    containerCategoria.classList.remove('hidden');
-    containerStatus.classList.remove('hidden');
-    lblContaOrigem.textContent = 'Conta Bancária *';
+    if (btnDespesa) btnDespesa.className = 'btn-tipo-transacao py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 bg-rose-600 text-white shadow-sm';
+    if (containerDestino) containerDestino.classList.add('hidden');
+    if (containerCategoria) containerCategoria.classList.remove('hidden');
+    if (containerStatus) containerStatus.classList.remove('hidden');
+    if (lblContaOrigem) lblContaOrigem.textContent = 'Conta Bancária *';
   } else if (tipo === 'receita') {
-    btnReceita.className = 'btn-tipo-transacao py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 bg-emerald-600 text-white shadow-sm';
-    containerDestino.classList.add('hidden');
-    containerCategoria.classList.remove('hidden');
-    containerStatus.classList.remove('hidden');
-    lblContaOrigem.textContent = 'Conta de Depósito *';
+    if (btnReceita) btnReceita.className = 'btn-tipo-transacao py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 bg-emerald-600 text-white shadow-sm';
+    if (containerDestino) containerDestino.classList.add('hidden');
+    if (containerCategoria) containerCategoria.classList.remove('hidden');
+    if (containerStatus) containerStatus.classList.remove('hidden');
+    if (lblContaOrigem) lblContaOrigem.textContent = 'Conta de Depósito *';
   } else if (tipo === 'transferencia') {
-    btnTransf.className = 'btn-tipo-transacao py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow-sm';
-    containerDestino.classList.remove('hidden');
-    containerCategoria.classList.add('hidden');
-    containerStatus.classList.add('hidden');
-    lblContaOrigem.textContent = 'Conta de Origem *';
+    if (btnTransf) btnTransf.className = 'btn-tipo-transacao py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow-sm';
+    if (containerDestino) containerDestino.classList.remove('hidden');
+    if (containerCategoria) containerCategoria.classList.add('hidden');
+    if (containerStatus) containerStatus.classList.add('hidden');
+    if (lblContaOrigem) lblContaOrigem.textContent = 'Conta de Origem *';
   }
 
   updateLancamentoCategorias();
@@ -2083,11 +2180,11 @@ function setTipoRecorrencia(tipo) {
   const btnRec = document.querySelector('.btn-rec-tipo[data-tipo="receita"]');
 
   if (tipo === 'despesa') {
-    btnDesp.className = 'btn-rec-tipo py-1.5 rounded-lg text-xs font-bold transition bg-rose-600 text-white';
-    btnRec.className = 'btn-rec-tipo py-1.5 rounded-lg text-xs font-bold transition text-slate-600 dark:text-slate-400';
+    if (btnDesp) btnDesp.className = 'btn-rec-tipo py-1.5 rounded-lg text-xs font-bold transition bg-rose-600 text-white';
+    if (btnRec) btnRec.className = 'btn-rec-tipo py-1.5 rounded-lg text-xs font-bold transition text-slate-600 dark:text-slate-400';
   } else {
-    btnRec.className = 'btn-rec-tipo py-1.5 rounded-lg text-xs font-bold transition bg-emerald-600 text-white';
-    btnDesp.className = 'btn-rec-tipo py-1.5 rounded-lg text-xs font-bold transition text-slate-600 dark:text-slate-400';
+    if (btnRec) btnRec.className = 'btn-rec-tipo py-1.5 rounded-lg text-xs font-bold transition bg-emerald-600 text-white';
+    if (btnDesp) btnDesp.className = 'btn-rec-tipo py-1.5 rounded-lg text-xs font-bold transition text-slate-600 dark:text-slate-400';
   }
 
   populateCategoriasSelects();
@@ -2129,6 +2226,7 @@ function setupEventListeners() {
       });
       return;
     }
+    abrirModalImportacao();
   });
 
   document.getElementById('btn-extrato-importar')?.addEventListener('click', () => {
@@ -2139,7 +2237,7 @@ function setupEventListeners() {
       });
       return;
     }
-    openModal('modal-import');
+    abrirModalImportacao();
   });
 
   // Menu do Usuário & Perfil
@@ -2175,76 +2273,13 @@ function setupEventListeners() {
     });
   });
 
-  // Botões de Modal
-  document.getElementById('btn-open-modal-lancamento')?.addEventListener('click', () => {
-    if (state.contas.length === 0) {
-      Swal.fire({
-        icon: 'info',
-        title: 'Cadastre uma Conta Primeiro',
-        text: 'Para fazer um lançamento, você precisa cadastrar pelo menos uma conta bancária ou carteira.',
-        confirmButtonText: 'Cadastrar Conta',
-        confirmButtonColor: '#4f46e5'
-      }).then(() => {
-        document.getElementById('btn-quick-new-account')?.click();
-      });
-      return;
-    }
-
-    document.getElementById('form-lancamento').reset();
-    document.getElementById('modal-lancamento-titulo').textContent = 'Novo Lançamento';
-    document.getElementById('lancamento-id').value = '';
-    document.getElementById('lancamento-data').value = new Date().toISOString().split('T')[0];
-    setTipoLancamento('despesa');
-    openModal('modal-lancamento');
-  });
-
-  document.getElementById('btn-quick-transfer')?.addEventListener('click', () => {
-    if (state.contas.length < 2) {
-      Swal.fire({
-        icon: 'info',
-        title: 'Necessário 2 Contas',
-        text: 'Você precisa ter pelo menos 2 contas cadastradas para realizar transferências entre elas.',
-        confirmButtonColor: '#4f46e5'
-      });
-      return;
-    }
-    document.getElementById('form-transferencia-modal').reset();
-    document.getElementById('transf-data').value = new Date().toISOString().split('T')[0];
-    openModal('modal-transferencia');
-  });
-
-  document.getElementById('btn-quick-new-account')?.addEventListener('click', () => {
-    document.getElementById('form-conta').reset();
-    document.getElementById('modal-conta-titulo').textContent = 'Nova Conta Bancária';
-    document.getElementById('conta-id').value = '';
-    document.getElementById('conta-cor').value = '#3b82f6';
-    document.getElementById('conta-cor-label').textContent = '#3b82f6';
-    openModal('modal-conta');
-  });
-
-  document.getElementById('btn-onboarding-conta')?.addEventListener('click', () => {
-    document.getElementById('btn-quick-new-account')?.click();
-  });
-
-  document.getElementById('btn-nova-conta-tab')?.addEventListener('click', () => {
-    document.getElementById('btn-quick-new-account')?.click();
-  });
-
-  document.getElementById('btn-modal-recorrencia')?.addEventListener('click', () => {
-    document.getElementById('form-recorrencia').reset();
-    document.getElementById('modal-rec-titulo').textContent = 'Nova Despesa / Receita Recorrente';
-    document.getElementById('rec-id').value = '';
-    document.getElementById('rec-dia').value = '5';
-    document.getElementById('rec-data-inicio').value = new Date().toISOString().split('T')[0];
-    document.getElementById('rec-data-fim').value = '';
-    setTipoRecorrencia('despesa');
-    openModal('modal-recorrencia');
-  });
-
-  document.getElementById('btn-nova-categoria-tab')?.addEventListener('click', () => {
-    document.getElementById('form-categoria').reset();
-    openModal('modal-categoria');
-  });
+  // Botões de Abertura de Modal
+  document.getElementById('btn-open-modal-lancamento')?.addEventListener('click', abrirModalLancamento);
+  document.getElementById('btn-quick-transfer')?.addEventListener('click', abrirModalTransferencia);
+  document.getElementById('btn-onboarding-conta')?.addEventListener('click', () => abrirModalConta());
+  document.getElementById('btn-nova-conta-tab')?.addEventListener('click', () => abrirModalConta());
+  document.getElementById('btn-modal-recorrencia')?.addEventListener('click', abrirModalRecorrencia);
+  document.getElementById('btn-nova-categoria-tab')?.addEventListener('click', abrirModalCategoria);
 
   document.getElementById('btn-force-generate-recurring')?.addEventListener('click', forceGenerateRecurring);
 
@@ -2841,7 +2876,7 @@ const TOUR_STEPS = [
     actionIcon: 'plus',
     action: () => {
       closeLiveTour();
-      document.getElementById('btn-quick-new-account')?.click();
+      abrirModalConta();
     }
   },
   {

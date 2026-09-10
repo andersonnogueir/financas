@@ -97,14 +97,14 @@
         <div class="flex items-center gap-2 sm:gap-3 shrink-0">
           
           <!-- Botão Importar Extrato (Desktop) -->
-          <button id="btn-open-modal-import" title="Importar extrato bancário com IA (OFX, CSV)" class="hidden md:flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50/80 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 border border-indigo-200/70 dark:border-indigo-800/70 rounded-xl shadow-sm transition transform hover:-translate-y-0.5">
+          <button id="btn-open-modal-import" onclick="abrirModalImportacao()" title="Importar extrato bancário com IA (OFX, CSV)" class="hidden md:flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50/80 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 border border-indigo-200/70 dark:border-indigo-800/70 rounded-xl shadow-sm transition transform hover:-translate-y-0.5">
             <i data-lucide="file-up" class="w-3.5 h-3.5 text-indigo-500"></i>
             <span>Importar Extrato</span>
             <span class="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-indigo-600 text-white">IA</span>
           </button>
 
           <!-- Botão Novo Lançamento (Destaque Principal) -->
-          <button id="btn-open-modal-lancamento" class="flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-md shadow-indigo-600/30 transition transform hover:-translate-y-0.5">
+          <button id="btn-open-modal-lancamento" onclick="abrirModalLancamento()" class="flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-md shadow-indigo-600/30 transition transform hover:-translate-y-0.5">
             <i data-lucide="plus-circle" class="w-4 h-4"></i>
             <span>Novo Lançamento</span>
             <span class="hidden sm:inline-block text-[10px] bg-indigo-700/80 px-1.5 py-0.5 rounded border border-indigo-400/30">N</span>
@@ -244,7 +244,7 @@
           <p class="text-xs text-indigo-200/80 mt-0.5">Cadastre sua primeira conta bancária para começar a lançar despesas ou importe seu extrato (OFX/CSV) com 1 clique.</p>
         </div>
       </div>
-      <button id="btn-onboarding-conta" class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/40 transition whitespace-nowrap flex items-center gap-2">
+      <button id="btn-onboarding-conta" onclick="abrirModalConta()" class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/40 transition whitespace-nowrap flex items-center gap-2">
         <i data-lucide="plus" class="w-4 h-4"></i>
         Cadastrar Primeira Conta
       </button>
@@ -599,7 +599,7 @@
             <i data-lucide="sparkles" class="w-4 h-4 text-amber-500"></i>
             Sincronizar no Mês Atual
           </button>
-          <button id="btn-modal-recorrencia" class="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition">
+          <button id="btn-modal-recorrencia" onclick="abrirModalRecorrencia()" class="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition">
             <i data-lucide="plus" class="w-4 h-4"></i>
             Nova Recorrência
           </button>
@@ -647,7 +647,7 @@
         </div>
 
         <div class="flex items-center gap-2">
-          <button id="btn-nova-conta-tab" class="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition">
+          <button id="btn-nova-conta-tab" onclick="abrirModalConta()" class="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition">
             <i data-lucide="plus" class="w-4 h-4"></i>
             Cadastrar Nova Conta
           </button>
@@ -674,7 +674,7 @@
           </p>
         </div>
 
-        <button id="btn-nova-categoria-tab" class="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition">
+        <button id="btn-nova-categoria-tab" onclick="abrirModalCategoria()" class="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition">
           <i data-lucide="plus" class="w-4 h-4"></i>
           Nova Categoria
         </button>
