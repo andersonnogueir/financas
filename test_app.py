@@ -417,6 +417,127 @@ class TestFinFlowBankImport(unittest.TestCase):
 
         print("OK: Webhooks universais processaram cancelamentos e confirmacoes de pagamento perfeitamente")
 
+    def test_13_admin_access_control(self):
+        # 1. Usuário comum (não admin) deve receber 403 Forbidden
+        self.app.post('/api/auth/register', json={
+            "nome": "Cliente Comum",
+            "email": "cliente.comum@exemplo.com",
+            "senha": "senhaSegura123"
+        })
+        
+        # Garantir que is_admin = 0
+        user_comum = database.get_user_by_email("cliente.comum@exemplo.com")
+        database.admin_update_user_plan_and_access(user_comum['id'], plano='free', plano_status='active', is_admin=0)
+
+        self.app.post('/api/auth/login', json={
+            "email": "cliente.comum@exemplo.com",
+            "senha": "senhaSegura123"
+        })
+
+        res_metrics = self.app.get('/api/admin/metrics')
+        self.assertEqual(res_metrics.status_code, 403)
+
+        res_users = self.app.get('/api/admin/users')
+        self.assertEqual(res_users.status_code, 403)
+
+        # 2. Usuário administrador (primeiro usuário registrado) deve acessar com 200 OK
+        first_user = database.get_user_by_email("anderson.import@exemplo.com")
+        database.admin_update_user_plan_and_access(first_user['id'], plano='pro', plano_status='active', is_admin=1)
+
+        self.app.post('/api/auth/login', json={
+            "email": "anderson.import@exemplo.com",
+            "senha": "senhaSegura123"
+        })
+
+        res_admin_metrics = self.app.get('/api/admin/metrics')
+        self.assertEqual(res_admin_metrics.status_code, 200)
+        data_m = json.loads(res_admin_metrics.data)
+        self.assertTrue(data_m['success'])
+        self.assertIn('total_usuarios', data_m['metrics'])
+
+        print("OK: Controle de acesso Admin (HTTP 403 para não-admins e HTTP 200 para Admin) validado")
+
+    def test_14_admin_metrics_and_user_listing(self):
+        # Logar como administrador
+        self.app.post('/api/auth/login', json={
+            "email": "anderson.import@exemplo.com",
+            "senha": "senhaSegura123"
+        })
+
+        # Testar listagem geral
+        res_list = self.app.get('/api/admin/users')
+        self.assertEqual(res_list.status_code, 200)
+        data_list = json.loads(res_list.data)
+        self.assertTrue(data_list['success'])
+        self.assertGreaterEqual(len(data_list['users']), 2)
+
+        # Testar busca por nome/email
+        res_search = self.app.get('/api/admin/users?search=comum')
+        self.assertEqual(res_search.status_code, 200)
+        data_search = json.loads(res_search.data)
+        self.assertEqual(len(data_search['users']), 1)
+        self.assertEqual(data_search['users'][0]['email'], 'cliente.comum@exemplo.com')
+
+        print("OK: Métricas globais do SaaS e listagem com busca de clientes funcionando perfeitamente")
+
+    def test_15_admin_unlock_plan_manually(self):
+        # Logar como administrador
+        self.app.post('/api/auth/login', json={
+            "email": "anderson.import@exemplo.com",
+            "senha": "senhaSegura123"
+        })
+
+        user_comum = database.get_user_by_email("cliente.comum@exemplo.com")
+
+        # Gerente libera manualmente o plano 'family' (Família/MEI) com status ativo e vitalício
+        res_override = self.app.put(f'/api/admin/users/{user_comum["id"]}', json={
+            "plano": "family",
+            "plano_status": "active",
+            "plano_periodo": "anual",
+            "plano_expira_em": "vitalicio"
+        })
+        self.assertEqual(res_override.status_code, 200)
+        data_override = json.loads(res_override.data)
+        self.assertTrue(data_override['success'])
+
+        # Verificar se o cliente agora tem acesso ao plano liberado
+        self.app.post('/api/auth/login', json={
+            "email": "cliente.comum@exemplo.com",
+            "senha": "senhaSegura123"
+        })
+        res_me = self.app.get('/api/auth/me')
+        self.assertEqual(res_me.status_code, 200)
+        data_me = json.loads(res_me.data)
+        self.assertEqual(data_me['user']['plano'], 'family')
+        self.assertEqual(data_me['user']['plano_status'], 'active')
+        self.assertTrue(data_me['user']['permissoes']['can_export'])
+        self.assertTrue(data_me['user']['permissoes']['can_import_ofx'])
+
+        print("OK: Gerente liberou manualmente o plano Família/MEI Vitalício com sucesso")
+
+    def test_16_admin_extend_trial(self):
+        # Logar como administrador
+        self.app.post('/api/auth/login', json={
+            "email": "anderson.import@exemplo.com",
+            "senha": "senhaSegura123"
+        })
+
+        user_comum = database.get_user_by_email("cliente.comum@exemplo.com")
+
+        # Gerente estende o trial por +30 dias
+        res_trial = self.app.post(f'/api/admin/users/{user_comum["id"]}/extend-trial', json={
+            "dias": 30
+        })
+        self.assertEqual(res_trial.status_code, 200)
+        data_trial = json.loads(res_trial.data)
+        self.assertTrue(data_trial['success'])
+
+        user_updated = database.get_user_by_id(user_comum['id'])
+        self.assertEqual(user_updated['plano_status'], 'trial')
+        self.assertIsNotNone(user_updated['trial_fim'])
+
+        print("OK: Gerente estendeu o período de teste (Trial) por +30 dias com sucesso")
+
 if __name__ == '__main__':
     unittest.main()
 

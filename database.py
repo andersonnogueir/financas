@@ -173,6 +173,7 @@ def _init_postgres_tables(conn):
             subscription_id TEXT,
             plano_periodo TEXT DEFAULT 'mensal',
             plano_expira_em TIMESTAMP,
+            is_admin INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -292,7 +293,8 @@ def _migrate_postgres_tables(conn):
         ("customer_id", "TEXT"),
         ("subscription_id", "TEXT"),
         ("plano_periodo", "TEXT DEFAULT 'mensal'"),
-        ("plano_expira_em", "TIMESTAMP")
+        ("plano_expira_em", "TIMESTAMP"),
+        ("is_admin", "INTEGER DEFAULT 0")
     ]
     for col_name, col_def in cols_usuarios:
         try:
@@ -363,7 +365,8 @@ def _migrate_sqlite_tables(conn):
         ("customer_id", "TEXT"),
         ("subscription_id", "TEXT"),
         ("plano_periodo", "TEXT DEFAULT 'mensal'"),
-        ("plano_expira_em", "DATETIME")
+        ("plano_expira_em", "DATETIME"),
+        ("is_admin", "INTEGER DEFAULT 0")
     ]
     for col_name, col_def in cols_usuarios:
         if col_name not in existing_user_cols:
@@ -411,6 +414,7 @@ def _init_sqlite_tables(conn):
             subscription_id TEXT,
             plano_periodo TEXT DEFAULT 'mensal',
             plano_expira_em DATETIME,
+            is_admin INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
     """)
@@ -553,7 +557,7 @@ def seed_user_default_categories(user_id, conn):
 # GERENCIAMENTO DE USUÁRIOS
 # ==========================================
 
-def create_user(nome, email, senha=None, google_id=None, avatar_url=None, plano='pro', plano_status='trial'):
+def create_user(nome, email, senha=None, google_id=None, avatar_url=None, plano='pro', plano_status='trial', is_admin=None):
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -562,10 +566,19 @@ def create_user(nome, email, senha=None, google_id=None, avatar_url=None, plano=
     senha_hash = generate_password_hash(senha) if senha else None
     trial_fim = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
 
+    # Primeiro usuário cadastrado no sistema é automaticamente definido como Administrador / Dono
+    if is_admin is None:
+        cursor.execute("SELECT COUNT(*) FROM usuarios")
+        count_row = cursor.fetchone()
+        user_count = count_row[0] if count_row else 0
+        is_admin_flag = 1 if user_count == 0 else 0
+    else:
+        is_admin_flag = int(is_admin)
+
     cursor.execute("""
-        INSERT INTO usuarios (nome, email, senha_hash, google_id, avatar_url, plano, plano_status, trial_fim, plano_periodo)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'mensal')
-    """, (nome_clean, email_clean, senha_hash, google_id, avatar_url, plano, plano_status, trial_fim))
+        INSERT INTO usuarios (nome, email, senha_hash, google_id, avatar_url, plano, plano_status, trial_fim, plano_periodo, is_admin)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'mensal', ?)
+    """, (nome_clean, email_clean, senha_hash, google_id, avatar_url, plano, plano_status, trial_fim, is_admin_flag))
 
     user_id = cursor.lastrowid
     conn.commit()
@@ -574,7 +587,7 @@ def create_user(nome, email, senha=None, google_id=None, avatar_url=None, plano=
 
     cursor.execute("""
         SELECT id, nome, email, avatar_url, plano, plano_status, trial_fim, 
-               gateway, customer_id, subscription_id, plano_periodo, plano_expira_em, created_at 
+               gateway, customer_id, subscription_id, plano_periodo, plano_expira_em, is_admin, created_at 
         FROM usuarios WHERE id = ?
     """, (user_id,))
     user = dict(cursor.fetchone())
@@ -595,12 +608,245 @@ def get_user_by_id(user_id):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT id, nome, email, google_id, avatar_url, plano, plano_status, trial_fim, 
-               gateway, customer_id, subscription_id, plano_periodo, plano_expira_em, created_at 
+               gateway, customer_id, subscription_id, plano_periodo, plano_expira_em, is_admin, created_at 
         FROM usuarios WHERE id = ?
     """, (user_id,))
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
+
+# ==========================================
+# PAINEL DO GERENTE & GESTÃO ADMIN SAAS
+# ==========================================
+
+def admin_get_dashboard_metrics(conn=None):
+    """Calcula indicadores globais do negócio SaaS para o gerente."""
+    should_close = False
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+
+    cursor = conn.cursor()
+
+    # 1. Contagens de clientes
+    cursor.execute("SELECT COUNT(*) FROM usuarios")
+    total_usuarios = int((cursor.fetchone() or [0])[0])
+
+    cursor.execute("""
+        SELECT COUNT(*) FROM usuarios 
+        WHERE plano_status = 'active' AND plano IN ('starter', 'pro', 'family')
+    """)
+    total_pagantes = int((cursor.fetchone() or [0])[0])
+
+    cursor.execute("SELECT COUNT(*) FROM usuarios WHERE plano_status = 'trial'")
+    total_trial = int((cursor.fetchone() or [0])[0])
+
+    cursor.execute("""
+        SELECT COUNT(*) FROM usuarios 
+        WHERE plano = 'free' OR plano_status IN ('expired', 'canceled')
+    """)
+    total_free = int((cursor.fetchone() or [0])[0])
+
+    # 2. MRR (Monthly Recurring Revenue estimado dos clientes ativos)
+    cursor.execute("""
+        SELECT plano, plano_periodo, COUNT(*) as qtd
+        FROM usuarios
+        WHERE plano_status = 'active' AND plano IN ('starter', 'pro', 'family')
+        GROUP BY plano, plano_periodo
+    """)
+    rows_mrr = cursor.fetchall()
+    
+    precos_mensal_equivalente = {
+        ('starter', 'mensal'): 14.90,
+        ('starter', 'anual'): 8.25,
+        ('pro', 'mensal'): 29.90,
+        ('pro', 'anual'): 16.58,
+        ('family', 'mensal'): 49.90,
+        ('family', 'anual'): 29.08,
+    }
+
+    mrr_total = 0.0
+    for r in rows_mrr:
+        p = r['plano'] if isinstance(r, dict) or hasattr(r, 'keys') else r[0]
+        periodo = r['plano_periodo'] if isinstance(r, dict) or hasattr(r, 'keys') else r[1]
+        qtd = r['qtd'] if isinstance(r, dict) or hasattr(r, 'keys') else r[2]
+        
+        m_equiv = precos_mensal_equivalente.get((p, periodo), 29.90 if p == 'pro' else 14.90)
+        mrr_total += float(m_equiv * qtd)
+
+    # 3. Volume global do sistema
+    cursor.execute("SELECT COUNT(*) FROM contas WHERE ativo = 1")
+    total_contas_geral = int((cursor.fetchone() or [0])[0])
+
+    cursor.execute("SELECT COUNT(*) FROM transacoes")
+    total_transacoes_geral = int((cursor.fetchone() or [0])[0])
+
+    if should_close:
+        conn.close()
+
+    return {
+        "total_usuarios": total_usuarios,
+        "total_pagantes": total_pagantes,
+        "total_trial": total_trial,
+        "total_free": total_free,
+        "mrr_estimado": round(mrr_total, 2),
+        "total_contas_geral": total_contas_geral,
+        "total_transacoes_geral": total_transacoes_geral
+    }
+
+def admin_list_users(busca=None, plano_filter=None, status_filter=None, conn=None):
+    """Lista todos os clientes com dados de consumo e assinatura para o gestor."""
+    should_close = False
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+
+    cursor = conn.cursor()
+
+    query = """
+        SELECT 
+            u.id, u.nome, u.email, u.avatar_url, u.plano, u.plano_status, u.trial_fim,
+            u.gateway, u.customer_id, u.subscription_id, u.plano_periodo, u.plano_expira_em, 
+            u.is_admin, u.created_at,
+            (SELECT COUNT(*) FROM contas c WHERE c.user_id = u.id AND c.ativo = 1) as total_contas,
+            (SELECT COUNT(*) FROM transacoes t WHERE t.user_id = u.id) as total_transacoes,
+            (SELECT MAX(t.data) FROM transacoes t WHERE t.user_id = u.id) as ultima_atividade
+        FROM usuarios u
+        WHERE 1=1
+    """
+    params = []
+
+    if busca:
+        query += " AND (lower(u.nome) LIKE ? OR lower(u.email) LIKE ?)"
+        params.extend([f"%{busca.strip().lower()}%", f"%{busca.strip().lower()}%"])
+
+    if plano_filter:
+        query += " AND u.plano = ?"
+        params.append(plano_filter)
+
+    if status_filter:
+        query += " AND u.plano_status = ?"
+        params.append(status_filter)
+
+    query += " ORDER BY u.created_at DESC, u.id DESC"
+
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+
+    agora = datetime.now()
+    clientes = []
+
+    for r in rows:
+        c = dict(r)
+        trial_fim = c.get('trial_fim')
+        status = c.get('plano_status') or 'active'
+        is_trial = False
+        dias_trial = 0
+
+        if status == 'trial' and trial_fim:
+            try:
+                tf = datetime.fromisoformat(str(trial_fim).replace('Z', '')) if isinstance(trial_fim, str) else trial_fim
+                if tf > agora:
+                    is_trial = True
+                    dias_trial = max(1, (tf - agora).days + 1)
+            except Exception:
+                pass
+
+        c['is_trial'] = is_trial
+        c['dias_restantes_trial'] = dias_trial
+        c['trial_fim'] = str(trial_fim) if trial_fim else None
+        c['plano_expira_em'] = str(c.get('plano_expira_em')) if c.get('plano_expira_em') else None
+        c['created_at'] = str(c.get('created_at')) if c.get('created_at') else None
+        c['total_contas'] = int(c.get('total_contas') or 0)
+        c['total_transacoes'] = int(c.get('total_transacoes') or 0)
+        c['is_admin'] = bool(c.get('is_admin'))
+        clientes.append(c)
+
+    if should_close:
+        conn.close()
+
+    return clientes
+
+def admin_update_user_plan_and_access(user_id, plano, plano_status, plano_periodo='mensal', plano_expira_em=None, dias_trial_add=0, is_admin=None, conn=None):
+    """Permite ao gerente liberar planos, alterar status ou prorrogar período de teste."""
+    should_close = False
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+
+    cursor = conn.cursor()
+    user = get_user_by_id(user_id)
+    if not user:
+        if should_close:
+            conn.close()
+        return False
+
+    agora = datetime.now()
+    trial_fim_novo = user.get('trial_fim')
+
+    # Prorrogação de período de teste se solicitado
+    if dias_trial_add > 0:
+        base_time = agora
+        if user.get('trial_fim'):
+            try:
+                tf = datetime.fromisoformat(str(user['trial_fim']).replace('Z', '')) if isinstance(user['trial_fim'], str) else user['trial_fim']
+                if tf > agora:
+                    base_time = tf
+            except Exception:
+                base_time = agora
+        trial_fim_novo = (base_time + timedelta(days=int(dias_trial_add))).strftime('%Y-%m-%d %H:%M:%S')
+        plano_status = 'trial'
+
+    # Se for ativo vitalício ou indeterminado, pode estipular expira_em em 10 anos
+    if plano_expira_em == 'vitalicio':
+        plano_expira_em = (agora + timedelta(days=3650)).strftime('%Y-%m-%d %H:%M:%S')
+
+    is_admin_val = user.get('is_admin', 0) if is_admin is None else (1 if is_admin else 0)
+
+    cursor.execute("""
+        UPDATE usuarios
+        SET plano = ?,
+            plano_status = ?,
+            plano_periodo = ?,
+            trial_fim = ?,
+            plano_expira_em = ?,
+            is_admin = ?
+        WHERE id = ?
+    """, (plano, plano_status, plano_periodo, trial_fim_novo, plano_expira_em, is_admin_val, user_id))
+
+    conn.commit()
+
+    # Log de auditoria da alteração pelo gerente
+    log_subscription_event(
+        user_id=user_id,
+        gateway='admin_manual',
+        event_type='admin_plan_override',
+        plano=plano,
+        valor=0.0,
+        status=plano_status,
+        payload=f"Alterado manualmente pelo gerente para plano={plano}, status={plano_status}, trial_fim={trial_fim_novo}"
+    )
+
+    if should_close:
+        conn.close()
+
+    return True
+
+def admin_delete_user(user_id, conn=None):
+    """Exclui cliente e dados vinculados do sistema."""
+    should_close = False
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM usuarios WHERE id = ?", (user_id,))
+    conn.commit()
+
+    if should_close:
+        conn.close()
+
+    return True
 
 # ==========================================
 # GESTÃO DE PLANOS & ASSINATURAS SAAS

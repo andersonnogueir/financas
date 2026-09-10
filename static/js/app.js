@@ -94,6 +94,16 @@ async function checkAuth() {
       avatarEl.src = state.user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(state.user.nome)}&background=6366f1&color=fff`;
     }
 
+    // Exibir aba de Gestão Master / Clientes caso seja administrador
+    const btnAdmin = document.getElementById('btn-nav-admin');
+    if (btnAdmin) {
+      if (state.user.is_admin) {
+        btnAdmin.classList.remove('hidden');
+      } else {
+        btnAdmin.classList.add('hidden');
+      }
+    }
+
     updateSubscriptionUI(state.user);
 
     return true;
@@ -460,6 +470,8 @@ async function loadAllData() {
     renderContasTab();
   } else if (state.activeTab === 'categorias') {
     renderCategoriasTab();
+  } else if (state.activeTab === 'admin') {
+    loadAdminData();
   }
 }
 
@@ -2424,6 +2436,57 @@ function setupEventListeners() {
     }
   });
 
+  // Filtros e Busca do Painel Administrativo
+  document.getElementById('admin-search-input')?.addEventListener('input', () => loadAdminData());
+  document.getElementById('admin-filter-plano')?.addEventListener('change', () => loadAdminData());
+  document.getElementById('admin-filter-status')?.addEventListener('change', () => loadAdminData());
+
+  // Form Admin Edit Client
+  document.getElementById('form-admin-edit-client')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const userId = document.getElementById('admin-edit-user-id').value;
+    const plano = document.getElementById('admin-edit-plano').value;
+    const status = document.getElementById('admin-edit-status').value;
+    const periodo = document.getElementById('admin-edit-periodo').value;
+    const diasTrial = parseInt(document.getElementById('admin-edit-dias-trial').value) || 0;
+    const expira = document.getElementById('admin-edit-expira').value;
+    const isAdmin = document.getElementById('admin-edit-is-admin-check').checked ? 1 : 0;
+
+    const payload = {
+      plano,
+      plano_status: status,
+      plano_periodo: periodo,
+      dias_trial_add: diasTrial,
+      plano_expira_em: expira || null,
+      is_admin: isAdmin
+    };
+
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        closeModal('modal-admin-edit-client');
+        await loadAdminData();
+        Swal.fire({
+          icon: 'success',
+          title: 'Cliente Atualizado!',
+          text: data.message || 'Plano e permissões salvos com sucesso.',
+          timer: 1800,
+          showConfirmButton: false
+        });
+      } else {
+        Swal.fire({ icon: 'error', title: 'Erro ao atualizar cliente', text: data.error || 'Falha ao salvar permissões.' });
+      }
+    } catch (err) {
+      console.error('Erro na atualização do cliente:', err);
+    }
+  });
+
   // Atalhos de Teclado
   window.addEventListener('keydown', (e) => {
     const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
@@ -2440,3 +2503,247 @@ function setupEventListeners() {
     }
   });
 }
+
+// ========================================================
+// PAINEL MASTER / GESTÃO SAAS DO GERENTE (ADMIN)
+// ========================================================
+
+async function loadAdminData() {
+  if (!state.user || !state.user.is_admin) return;
+
+  const search = document.getElementById('admin-search-input')?.value.trim() || '';
+  const planoFilter = document.getElementById('admin-filter-plano')?.value || '';
+  const statusFilter = document.getElementById('admin-filter-status')?.value || '';
+
+  try {
+    const [resMetrics, resUsers] = await Promise.all([
+      fetch('/api/admin/metrics'),
+      fetch(`/api/admin/users?search=${encodeURIComponent(search)}&plano=${encodeURIComponent(planoFilter)}&status=${encodeURIComponent(statusFilter)}`)
+    ]);
+
+    if (resMetrics.ok) {
+      const dataM = await resMetrics.json();
+      if (dataM.success && dataM.metrics) {
+        const m = dataM.metrics;
+        const totalUsersEl = document.getElementById('admin-kpi-total-users');
+        const freeUsersEl = document.getElementById('admin-kpi-free-users');
+        const pagantesEl = document.getElementById('admin-kpi-pagantes');
+        const trialEl = document.getElementById('admin-kpi-trial');
+        const mrrEl = document.getElementById('admin-kpi-mrr');
+
+        if (totalUsersEl) totalUsersEl.textContent = m.total_usuarios || 0;
+        if (freeUsersEl) freeUsersEl.textContent = m.total_free || 0;
+        if (pagantesEl) pagantesEl.textContent = m.total_pagantes || 0;
+        if (trialEl) trialEl.textContent = m.total_trial || 0;
+        if (mrrEl) mrrEl.textContent = formatBRL(m.mrr_estimado || 0);
+      }
+    }
+
+    if (resUsers.ok) {
+      const dataU = await resUsers.json();
+      if (dataU.success) {
+        state.adminUsers = dataU.users || [];
+        renderAdminUsersTable(state.adminUsers);
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao carregar dados administrativos:', err);
+  }
+}
+window.loadAdminData = loadAdminData;
+
+function renderAdminUsersTable(users) {
+  const tbody = document.getElementById('tbody-admin-users');
+  const emptyMsg = document.getElementById('admin-empty-msg');
+  if (!tbody) return;
+
+  if (!users || users.length === 0) {
+    tbody.innerHTML = '';
+    if (emptyMsg) emptyMsg.classList.remove('hidden');
+    return;
+  }
+
+  if (emptyMsg) emptyMsg.classList.add('hidden');
+
+  const planoBadgeMap = {
+    'free': '<span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border border-slate-300 dark:border-slate-700">Freemium</span>',
+    'starter': '<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-bold border border-blue-200 dark:border-blue-800">Starter MVP</span>',
+    'pro': '<span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800">Padrão PRO</span>',
+    'family': '<span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-bold border border-purple-200 dark:border-purple-800">Família/MEI</span>'
+  };
+
+  tbody.innerHTML = users.map(u => {
+    const isCurrentUser = state.user && state.user.id === u.id;
+    const avatar = u.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nome)}&background=6366f1&color=fff`;
+    
+    // Status Badge
+    let statusBadge = '';
+    if (u.is_trial) {
+      statusBadge = `<span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 font-bold border border-amber-200 dark:border-amber-800"><i data-lucide="sparkles" class="w-3 h-3"></i> ${u.dias_restantes_trial}d Trial</span>`;
+    } else if (u.plano_status === 'active') {
+      statusBadge = `<span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-200 dark:border-emerald-800"><i data-lucide="check" class="w-3 h-3"></i> Ativo</span>`;
+    } else if (u.plano_status === 'expired') {
+      statusBadge = `<span class="text-[10px] px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 font-bold border border-rose-200 dark:border-rose-800">Expirado</span>`;
+    } else if (u.plano_status === 'canceled') {
+      statusBadge = `<span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold border border-slate-200 dark:border-slate-700">Cancelado</span>`;
+    } else {
+      statusBadge = `<span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold">${u.plano_status || 'Free'}</span>`;
+    }
+
+    const adminBadge = u.is_admin ? '<span class="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-300 font-extrabold border border-amber-500/30">ADMIN</span>' : '';
+    const cadastroData = u.created_at ? formatDateBR(u.created_at.split(' ')[0]) : '-';
+
+    return `
+      <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+        <!-- Cliente -->
+        <td class="py-3 px-4">
+          <div class="flex items-center gap-2.5">
+            <img src="${avatar}" class="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 object-cover shrink-0" alt="Avatar">
+            <div>
+              <div class="flex items-center gap-1.5">
+                <span class="font-bold text-slate-900 dark:text-white">${u.nome}</span>
+                ${adminBadge}
+                ${isCurrentUser ? '<span class="text-[9px] px-1 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-semibold">(Você)</span>' : ''}
+              </div>
+              <div class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">${u.email}</div>
+              <div class="text-[10px] text-slate-400">Cadastrado em: ${cadastroData}</div>
+            </div>
+          </div>
+        </td>
+
+        <!-- Plano Atual -->
+        <td class="py-3 px-4 whitespace-nowrap">
+          <div class="space-y-1">
+            ${planoBadgeMap[u.plano] || planoBadgeMap['free']}
+            <div class="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-semibold">Ciclo: ${u.plano_periodo || 'Mensal'}</div>
+          </div>
+        </td>
+
+        <!-- Status & Validade -->
+        <td class="py-3 px-4 whitespace-nowrap">
+          <div class="space-y-1">
+            ${statusBadge}
+            ${u.plano_expira_em ? `<div class="text-[10px] text-slate-400">Expira: ${formatDateBR(u.plano_expira_em.split(' ')[0])}</div>` : ''}
+          </div>
+        </td>
+
+        <!-- Uso / Dados -->
+        <td class="py-3 px-4 text-center whitespace-nowrap">
+          <div class="inline-flex flex-col items-center">
+            <span class="font-bold text-slate-700 dark:text-slate-200 text-xs">${u.total_contas} contas &bull; ${u.total_transacoes} lançamentos</span>
+            <span class="text-[10px] text-slate-400">Última transação: ${u.ultima_atividade ? formatDateBR(u.ultima_atividade) : 'Sem atividade'}</span>
+          </div>
+        </td>
+
+        <!-- Ações Rápidas -->
+        <td class="py-3 px-4 text-center whitespace-nowrap">
+          <div class="flex items-center justify-center gap-1.5">
+            <!-- Botão Gerenciar / Liberar -->
+            <button onclick="openModalAdminEditClient(${u.id})" title="Liberar Planos, Prorrogar ou Alterar Permissões" class="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80 font-bold text-[11px] transition flex items-center gap-1 shadow-sm">
+              <i data-lucide="sliders" class="w-3.5 h-3.5 text-indigo-500"></i>
+              <span>Gerenciar</span>
+            </button>
+
+            <!-- Prorrogar Teste Rápido (+15 dias) -->
+            <button onclick="adminQuickExtendTrial(${u.id}, 15)" title="Prorrogar Teste por +15 Dias Gratuitamente" class="px-2 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/80 font-semibold text-[11px] transition flex items-center gap-1">
+              <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-amber-500"></i>
+              <span>+15d Trial</span>
+            </button>
+
+            <!-- Excluir Cliente (se não for a si mesmo) -->
+            ${!isCurrentUser ? `
+              <button onclick="adminDeleteClient(${u.id}, '${u.nome}')" title="Excluir Conta do Cliente" class="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              </button>
+            ` : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  lucide.createIcons();
+}
+
+function openModalAdminEditClient(userId) {
+  const user = (state.adminUsers || []).find(u => u.id === userId);
+  if (!user) return;
+
+  document.getElementById('admin-edit-user-id').value = user.id;
+  document.getElementById('admin-modal-client-name-email').textContent = `${user.nome} (${user.email})`;
+  
+  const planoEl = document.getElementById('admin-edit-plano');
+  const statusEl = document.getElementById('admin-edit-status');
+  const periodoEl = document.getElementById('admin-edit-periodo');
+  const diasTrialEl = document.getElementById('admin-edit-dias-trial');
+  const expiraEl = document.getElementById('admin-edit-expira');
+  const isAdminCheck = document.getElementById('admin-edit-is-admin-check');
+
+  if (planoEl) planoEl.value = user.plano || 'free';
+  if (statusEl) statusEl.value = user.plano_status || 'active';
+  if (periodoEl) periodoEl.value = user.plano_periodo || 'mensal';
+  if (diasTrialEl) diasTrialEl.value = '0';
+  if (expiraEl) expiraEl.value = '';
+  if (isAdminCheck) isAdminCheck.checked = Boolean(user.is_admin);
+
+  openModal('modal-admin-edit-client');
+}
+window.openModalAdminEditClient = openModalAdminEditClient;
+
+async function adminQuickExtendTrial(userId, dias = 15) {
+  try {
+    const res = await fetch(`/api/admin/users/${userId}/extend-trial`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dias })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      Swal.fire({
+        icon: 'success',
+        title: 'Período de Teste Estendido!',
+        text: data.message,
+        timer: 1800,
+        showConfirmButton: false
+      });
+      await loadAdminData();
+    } else {
+      Swal.fire({ icon: 'error', title: 'Erro', text: data.error || 'Não foi possível estender o teste.' });
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+window.adminQuickExtendTrial = adminQuickExtendTrial;
+
+async function adminDeleteClient(userId, userName = 'este cliente') {
+  const result = await Swal.fire({
+    title: `Excluir ${userName}?`,
+    html: `
+      <p class="text-xs text-rose-500 font-bold mb-2">Atenção: Ação irreversível!</p>
+      <p class="text-xs text-slate-500">Todas as contas, transações, categorias e histórico do cliente serão permanentemente excluídos do banco de dados.</p>
+    `,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: 'Sim, excluir cliente',
+    cancelButtonText: 'Cancelar'
+  });
+
+  if (result.isConfirmed) {
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        Swal.fire({ icon: 'success', title: 'Cliente Excluído', text: data.message, timer: 1500, showConfirmButton: false });
+        await loadAdminData();
+      } else {
+        Swal.fire({ icon: 'error', title: 'Erro', text: data.error || 'Não foi possível excluir o usuário.' });
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+}
+window.adminDeleteClient = adminDeleteClient;

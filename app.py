@@ -195,6 +195,18 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# Decorator para rotas exclusivas do Administrador / Gestor do SaaS
+def admin_required(f):
+    @wraps(f)
+    @login_required
+    def decorated_function(*args, **kwargs):
+        user_id = session.get('user_id')
+        user = database.get_user_by_id(user_id)
+        if not user or not user.get('is_admin'):
+            return jsonify({"error": "Acesso negado. Apenas administradores e gestores da plataforma têm acesso a esta funcionalidade."}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
 # ==========================================
 # MODELO SAAS: CONFIGURAÇÃO DE PLANOS & TIERS
 # ==========================================
@@ -356,13 +368,23 @@ def auth_register():
         session['user_nome'] = user['nome']
         session['user_email'] = user['email']
         session['user_avatar'] = user.get('avatar_url') or ''
+        session['is_admin'] = user.get('is_admin', 0)
         
         token = generate_jwt(user['id'], user['email'])
 
         return jsonify({
             "success": True, 
             "token": token,
-            "user": user, 
+            "user": {
+                "id": user['id'],
+                "nome": user['nome'],
+                "email": user['email'],
+                "is_admin": user.get('is_admin', 0),
+                "plano": user.get('plano', 'pro'),
+                "plano_status": user.get('plano_status', 'trial'),
+                "trial_fim": user.get('trial_fim'),
+                "avatar_url": user.get('avatar_url') or ''
+            }, 
             "message": "Conta criada com sucesso!"
         }), 201
     except Exception as e:
@@ -397,6 +419,7 @@ def auth_login():
     session['user_nome'] = user['nome']
     session['user_email'] = user['email']
     session['user_avatar'] = user.get('avatar_url') or ''
+    session['is_admin'] = user.get('is_admin', 0)
 
     token = generate_jwt(user['id'], user['email'])
 
@@ -407,6 +430,7 @@ def auth_login():
             "id": user['id'],
             "nome": user['nome'],
             "email": user['email'],
+            "is_admin": user.get('is_admin', 0),
             "avatar_url": user.get('avatar_url') or ''
         },
         "message": f"Bem-vindo(a) de volta, {user['nome']}!"
@@ -425,6 +449,7 @@ def auth_verify():
             "id": user['id'],
             "nome": user['nome'],
             "email": user['email'],
+            "is_admin": user.get('is_admin', 0),
             "avatar_url": user.get('avatar_url') or ''
         }
     })
@@ -480,6 +505,7 @@ def auth_google():
         """, (google_id, avatar_url, user['id']))
         conn.commit()
         conn.close()
+        user = database.get_user_by_id(user['id'])
     else:
         user = database.create_user(nome=nome, email=email, google_id=google_id, avatar_url=avatar_url)
 
@@ -487,6 +513,7 @@ def auth_google():
     session['user_nome'] = user['nome']
     session['user_email'] = user['email']
     session['user_avatar'] = user.get('avatar_url') or avatar_url
+    session['is_admin'] = user.get('is_admin', 0)
 
     token = generate_jwt(user['id'], user['email'])
 
@@ -497,6 +524,7 @@ def auth_google():
             "id": user['id'],
             "nome": user['nome'],
             "email": user['email'],
+            "is_admin": user.get('is_admin', 0),
             "avatar_url": session['user_avatar']
         },
         "message": "Login com Google realizado com sucesso!"
@@ -527,6 +555,7 @@ def auth_me():
             "id": user['id'],
             "nome": user['nome'],
             "email": user['email'],
+            "is_admin": user.get('is_admin', 0),
             "avatar_url": user.get('avatar_url') or '',
             "plano": plan_ctx['plano'],
             "plano_nome": plan_ctx['plano_nome'],
@@ -1674,6 +1703,96 @@ def subscription_cancel():
     return jsonify({
         "success": True,
         "message": "Sua assinatura foi cancelada. Sua conta continuará com acesso aos recursos gratuitos (Freemium)."
+    })
+
+# ==========================================
+# GESTÃO MASTER & PAINEL ADMINISTRATIVO SAAS
+# ==========================================
+
+@app.route("/api/admin/metrics", methods=["GET"])
+@admin_required
+def admin_metrics():
+    metrics = database.admin_get_dashboard_metrics()
+    return jsonify({
+        "success": True,
+        "metrics": metrics
+    })
+
+@app.route("/api/admin/users", methods=["GET"])
+@admin_required
+def admin_users():
+    search = request.args.get("search", "").strip()
+    status_filter = request.args.get("status", "").strip()
+    plano_filter = request.args.get("plano", "").strip()
+    users = database.admin_list_users(busca=search, plano_filter=plano_filter, status_filter=status_filter)
+    return jsonify({
+        "success": True,
+        "users": users,
+        "total": len(users)
+    })
+
+@app.route("/api/admin/users/<int:target_user_id>", methods=["PUT"])
+@admin_required
+def admin_update_user(target_user_id):
+    data = request.get_json() or {}
+    plano = data.get("plano", "starter")
+    plano_status = data.get("plano_status", "active")
+    plano_periodo = data.get("plano_periodo", "mensal")
+    plano_expira_em = data.get("plano_expira_em")
+    dias_trial_add = int(data.get("dias_trial_add", 0) or 0)
+    is_admin = data.get("is_admin")
+
+    success = database.admin_update_user_plan_and_access(
+        user_id=target_user_id,
+        plano=plano,
+        plano_status=plano_status,
+        plano_periodo=plano_periodo,
+        plano_expira_em=plano_expira_em,
+        dias_trial_add=dias_trial_add,
+        is_admin=is_admin
+    )
+
+    if not success:
+        return jsonify({"error": "Usuário não encontrado"}), 404
+
+    updated_user = database.get_user_by_id(target_user_id)
+    return jsonify({
+        "success": True,
+        "message": "Permissões e plano do cliente atualizados com sucesso!",
+        "user": updated_user
+    })
+
+@app.route("/api/admin/users/<int:target_user_id>/extend-trial", methods=["POST"])
+@admin_required
+def admin_extend_user_trial(target_user_id):
+    data = request.get_json() or {}
+    dias = int(data.get("dias", 7) or 7)
+
+    success = database.admin_update_user_plan_and_access(
+        user_id=target_user_id,
+        plano="pro",
+        plano_status="trial",
+        dias_trial_add=dias
+    )
+
+    if not success:
+        return jsonify({"error": "Usuário não encontrado"}), 404
+
+    return jsonify({
+        "success": True,
+        "message": f"Período de teste (Trial) prorrogado com sucesso por +{dias} dias!"
+    })
+
+@app.route("/api/admin/users/<int:target_user_id>", methods=["DELETE"])
+@admin_required
+def admin_delete_user(target_user_id):
+    if target_user_id == session.get('user_id'):
+        return jsonify({"error": "Não é permitido excluir sua própria conta de administrador enquanto estiver logado."}), 400
+
+    database.admin_delete_user(target_user_id)
+    return jsonify({
+        "success": True,
+        "message": "Cliente e todos os seus dados foram excluídos com sucesso."
     })
 
 if __name__ == "__main__":
