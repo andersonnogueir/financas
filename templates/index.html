@@ -1640,288 +1640,105 @@
   </div>
 
   <!-- ============================================== -->
-  <!-- MODAL: GUIA INTERATIVO DAS FUNCIONALIDADES (TOUR) -->
+  <!-- GUIA INTERATIVO AO VIVO (LIVE SPOTLIGHT TOUR) -->
   <!-- ============================================== -->
-  <div id="modal-onboarding-tour" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 modal-backdrop hidden">
-    <div class="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col transform transition-all">
+  <div id="live-tour-container" class="hidden fixed inset-0 z-50 pointer-events-none transition-opacity duration-300">
+    
+    <!-- Backdrop com SVG Cutout / Mask para o Spotlight -->
+    <svg id="live-tour-svg-backdrop" class="fixed inset-0 w-full h-full pointer-events-auto" style="z-index: 51;">
+      <defs>
+        <mask id="spotlight-mask">
+          <rect x="0" y="0" width="100%" height="100%" fill="white" />
+          <rect id="spotlight-cutout" x="0" y="0" width="0" height="0" rx="14" ry="14" fill="black" />
+        </mask>
+      </defs>
+      <rect x="0" y="0" width="100%" height="100%" fill="rgba(15, 23, 42, 0.78)" mask="url(#spotlight-mask)" />
+    </svg>
+
+    <!-- Anel pulsante de destaque sobre o elemento alvo -->
+    <div id="spotlight-pulse-ring" class="fixed pointer-events-none transition-all duration-300 rounded-2xl border-2 border-indigo-500 shadow-[0_0_25px_rgba(99,102,241,0.6)]" style="z-index: 52; display: none;"></div>
+
+    <!-- Popover Flutuante Interativo (adaptativo para Desktop e Mobile) -->
+    <div id="live-tour-popover" class="fixed pointer-events-auto w-[calc(100vw-24px)] sm:w-[420px] max-w-[460px] bg-white dark:bg-slate-900 border border-indigo-500/30 dark:border-indigo-500/40 rounded-3xl shadow-2xl overflow-hidden transition-all duration-300 flex flex-col" style="z-index: 55; opacity: 0; transform: scale(0.95);">
       
-      <!-- Topo com Barra de Progresso e Cabeçalho -->
-      <div class="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-indigo-600/10 via-purple-600/10 to-pink-600/10 relative">
-        <div class="flex items-center justify-between gap-3 mb-3">
-          <div class="flex items-center gap-2">
-            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-indigo-600 text-white shadow-sm">
-              <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
-              Tour do Sistema
-            </span>
-            <span class="text-xs font-bold text-slate-500 dark:text-slate-400">
-              Passo <span id="tour-step-current" class="text-indigo-600 dark:text-indigo-400 font-extrabold">1</span> de 6
-            </span>
-          </div>
-
-          <button onclick="closeTourModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-            <i data-lucide="x" class="w-5 h-5"></i>
-          </button>
+      <!-- Topo do Popover -->
+      <div class="px-5 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-600 text-white shadow-sm">
+            <i data-lucide="sparkles" class="w-3 h-3"></i>
+            Guia Interativo
+          </span>
+          <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+            Passo <span id="live-tour-step-num" class="text-indigo-600 dark:text-indigo-400 font-extrabold">1</span> de 6
+          </span>
         </div>
 
-        <!-- Barra de Progresso Suave -->
-        <div class="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-          <div id="tour-progress-bar" class="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-300 rounded-full" style="width: 16.66%;"></div>
-        </div>
+        <button onclick="closeLiveTour()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Fechar Guia">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
       </div>
 
-      <!-- Container Dinâmico dos 6 Passos -->
-      <div class="p-6 sm:p-8 flex-1 overflow-y-auto min-h-[320px]">
-        
-        <!-- PASSO 1: CONTAS BANCÁRIAS -->
-        <div class="tour-slide space-y-4" data-slide="1">
-          <div class="flex items-center gap-4">
-            <div class="w-14 h-14 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0 shadow-inner">
-              <i data-lucide="landmark" class="w-7 h-7"></i>
-            </div>
-            <div>
-              <span class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Passo 01 de 06</span>
-              <h3 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Cadastre suas Contas & Carteiras</h3>
-            </div>
+      <!-- Barra de Progresso do Tour -->
+      <div class="w-full bg-slate-100 dark:bg-slate-800 h-1.5 overflow-hidden">
+        <div id="live-tour-progress" class="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-300 rounded-full" style="width: 16.66%;"></div>
+      </div>
+
+      <!-- Conteúdo do Passo -->
+      <div class="p-5 space-y-3.5">
+        <div class="flex items-start gap-3">
+          <div id="live-tour-icon-box" class="w-11 h-11 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0 shadow-inner mt-0.5">
+            <i id="live-tour-icon" data-lucide="landmark" class="w-5 h-5"></i>
           </div>
-
-          <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-            O primeiro passo para organizar suas finanças é cadastrar onde seu dinheiro está guardado. Você pode cadastrar contas correntes (<strong>Nubank, Itaú, Inter, Bradesco, BB, Santander, C6</strong>), poupança, carteira física de dinheiro ou investimentos.
-          </p>
-
-          <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 flex items-start gap-3">
-            <i data-lucide="lightbulb" class="w-5 h-5 text-amber-500 shrink-0 mt-0.5"></i>
-            <div class="text-xs text-slate-600 dark:text-slate-300">
-              <strong class="text-slate-900 dark:text-white">Dica Importante:</strong> Defina o saldo atual da sua conta como saldo inicial. O FinFlow calculará todas as entradas e saídas a partir dele automaticamente!
-            </div>
-          </div>
-
-          <div class="pt-2">
-            <button onclick="tourAction('nova-conta')" class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/30 transition flex items-center gap-2">
-              <i data-lucide="plus" class="w-4 h-4"></i>
-              Cadastrar Minha Primeira Conta Agora
-            </button>
-          </div>
-        </div>
-
-        <!-- PASSO 2: IMPORTAÇÃO INTELIGENTE COM IA -->
-        <div class="tour-slide hidden space-y-4" data-slide="2">
-          <div class="flex items-center gap-4">
-            <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shrink-0 shadow-lg shadow-indigo-500/20">
-              <i data-lucide="file-up" class="w-7 h-7"></i>
-            </div>
-            <div>
-              <span class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Passo 02 de 06</span>
-              <h3 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Importe Extratos Bancários com IA</h3>
-            </div>
-          </div>
-
-          <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-            Nunca mais perca horas digitando gastos manualmente! Exporte o extrato do seu aplicativo bancário (arquivo <strong>.OFX</strong> ou <strong>.CSV</strong>) e arraste para o FinFlow. A nossa <strong>Inteligência Artificial</strong> lê e categoriza tudo em segundos.
-          </p>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div class="p-3 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/40 border border-indigo-200/60 dark:border-indigo-800/60 flex items-start gap-2.5">
-              <i data-lucide="shield-alert" class="w-4 h-4 text-indigo-500 shrink-0 mt-0.5"></i>
-              <div class="text-[11px] text-slate-600 dark:text-slate-300">
-                <strong>Anti-Duplicidade:</strong> O sistema bloqueia lançamentos repetidos mesmo se você importar o mesmo extrato duas vezes.
-              </div>
-            </div>
-            <div class="p-3 rounded-xl bg-purple-50/50 dark:bg-purple-950/40 border border-purple-200/60 dark:border-purple-800/60 flex items-start gap-2.5">
-              <i data-lucide="brain" class="w-4 h-4 text-purple-500 shrink-0 mt-0.5"></i>
-              <div class="text-[11px] text-slate-600 dark:text-slate-300">
-                <strong>Memória Contínua:</strong> Ao corrigir uma categoria, a IA grava o padrão e classifica tudo igual no futuro!
-              </div>
-            </div>
-          </div>
-
-          <div class="pt-2">
-            <button onclick="tourAction('importar')" class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/30 transition flex items-center gap-2">
-              <i data-lucide="upload-cloud" class="w-4 h-4"></i>
-              Abrir Importador Inteligente
-            </button>
-          </div>
-        </div>
-
-        <!-- PASSO 3: LANÇAMENTOS MANUAIS & TRANSFERÊNCIAS -->
-        <div class="tour-slide hidden space-y-4" data-slide="3">
-          <div class="flex items-center gap-4">
-            <div class="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0 shadow-inner">
-              <i data-lucide="plus-circle" class="w-7 h-7"></i>
-            </div>
-            <div>
-              <span class="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Passo 03 de 06</span>
-              <h3 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Lançamentos Rápidos & Transferências</h3>
-            </div>
-          </div>
-
-          <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-            Precisa lançar um café, uma compra no Pix ou um dinheiro recebido? Clique em <strong>Novo Lançamento</strong> ou apenas aperte a tecla <kbd class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono font-bold text-xs">N</kbd> no seu teclado!
-          </p>
-
-          <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2">
-            <div class="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200">
-              <i data-lucide="arrow-left-right" class="w-4 h-4 text-indigo-500"></i>
-              Transferência entre suas Contas
-            </div>
-            <p class="text-xs text-slate-600 dark:text-slate-300">
-              Transferiu da sua conta corrente para a poupança ou investimentos? Use o tipo <strong>Transferência</strong>: ele debita da origem e credita no destino simultaneamente sem distorcer seu balanço de receitas e despesas.
+          <div class="min-w-0">
+            <h3 id="live-tour-title" class="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white tracking-tight leading-snug">
+              Cadastre suas Contas & Carteiras
+            </h3>
+            <p id="live-tour-desc" class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mt-1">
+              Aqui você gerencia onde seu dinheiro está guardado.
             </p>
           </div>
-
-          <div class="pt-2">
-            <button onclick="tourAction('novo-lancamento')" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/30 transition flex items-center gap-2">
-              <i data-lucide="plus-circle" class="w-4 h-4"></i>
-              Fazer um Lançamento de Teste
-            </button>
-          </div>
         </div>
 
-        <!-- PASSO 4: CONTAS FIXAS & RECORRÊNCIAS -->
-        <div class="tour-slide hidden space-y-4" data-slide="4">
-          <div class="flex items-center gap-4">
-            <div class="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 shadow-inner">
-              <i data-lucide="refresh-cw" class="w-7 h-7"></i>
-            </div>
-            <div>
-              <span class="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Passo 04 de 06</span>
-              <h3 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Despesas & Receitas Recorrentes (Fixas)</h3>
-            </div>
-          </div>
-
-          <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-            Contas como <strong>Aluguel, Condomínio, Energia, Água, Internet, Assinaturas (Netflix, Spotify, Academia)</strong> e seu <strong>Salário</strong> se repetem todo mês. Cadastre-as uma única vez na aba <strong>Recorrências</strong>!
-          </p>
-
-          <div class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
-            <i data-lucide="sparkles" class="w-5 h-5 text-amber-500 shrink-0 mt-0.5"></i>
-            <div class="text-xs text-slate-600 dark:text-slate-300">
-              <strong class="text-slate-900 dark:text-white">Previsão Automática:</strong> O FinFlow gera os lançamentos pendentes no dia 1º de cada mês e calcula seu <strong>Saldo Previsto</strong> antes mesmo das contas vencerem.
-            </div>
-          </div>
-
-          <div class="pt-2">
-            <button onclick="tourAction('tab-recorrencias')" class="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-md shadow-amber-600/30 transition flex items-center gap-2">
-              <i data-lucide="calendar" class="w-4 h-4"></i>
-              Ver Aba de Recorrências
-            </button>
-          </div>
+        <!-- Botão de Ação Direta para o Usuário Testar na Prática -->
+        <div id="live-tour-action-container" class="pt-1">
+          <button id="live-tour-action-btn" onclick="executeLiveTourAction()" class="w-full py-2.5 px-3.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm">
+            <i id="live-tour-action-icon" data-lucide="plus" class="w-4 h-4 text-indigo-500"></i>
+            <span id="live-tour-action-label">Cadastrar Minha Primeira Conta Agora</span>
+          </button>
         </div>
-
-        <!-- PASSO 5: CATEGORIAS & MEMÓRIA DE IA -->
-        <div class="tour-slide hidden space-y-4" data-slide="5">
-          <div class="flex items-center gap-4">
-            <div class="w-14 h-14 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-600 dark:text-purple-400 shrink-0 shadow-inner">
-              <i data-lucide="tags" class="w-7 h-7"></i>
-            </div>
-            <div>
-              <span class="text-[11px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Passo 05 de 06</span>
-              <h3 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Categorias & Personalização Total</h3>
-            </div>
-          </div>
-
-          <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-            Sua conta já vem com mais de 10 categorias essenciais pré-configuradas (Alimentação, Moradia, Transporte, Saúde, Lazer, etc.). Na aba <strong>Categorias & IA</strong>, você pode criar quantas novas categorias quiser com cores e ícones customizados.
-          </p>
-
-          <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 flex items-start gap-3">
-            <i data-lucide="brain" class="w-5 h-5 text-purple-500 shrink-0 mt-0.5"></i>
-            <div class="text-xs text-slate-600 dark:text-slate-300">
-              <strong class="text-slate-900 dark:text-white">Painel de Memória da IA:</strong> Veja todas as palavras-chave que você ensinou à IA durante as importações e edite regras a qualquer momento.
-            </div>
-          </div>
-
-          <div class="pt-2">
-            <button onclick="tourAction('tab-categorias')" class="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-md shadow-purple-600/30 transition flex items-center gap-2">
-              <i data-lucide="tags" class="w-4 h-4"></i>
-              Explorar Categorias & IA
-            </button>
-          </div>
-        </div>
-
-        <!-- PASSO 6: DASHBOARD & INSIGHTS DA IA -->
-        <div class="tour-slide hidden space-y-4" data-slide="6">
-          <div class="flex items-center gap-4">
-            <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-600 flex items-center justify-center text-white shrink-0 shadow-lg shadow-indigo-500/20">
-              <i data-lucide="layout-dashboard" class="w-7 h-7"></i>
-            </div>
-            <div>
-              <span class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Passo 06 de 06</span>
-              <h3 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Dashboard, Métricas & IA Financeira</h3>
-            </div>
-          </div>
-
-          <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-            Sua central de inteligência financeira! Acompanhe de forma limpa e objetiva:
-          </p>
-
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
-            <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <p class="text-[10px] text-slate-400 font-bold uppercase">Saldo Geral</p>
-              <p class="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 mt-0.5">Consolidado</p>
-            </div>
-            <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <p class="text-[10px] text-slate-400 font-bold uppercase">Receitas</p>
-              <p class="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">Pagas / Pendentes</p>
-            </div>
-            <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <p class="text-[10px] text-slate-400 font-bold uppercase">Despesas</p>
-              <p class="text-xs font-extrabold text-rose-600 dark:text-rose-400 mt-0.5">Pagas / Pendentes</p>
-            </div>
-            <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <p class="text-[10px] text-slate-400 font-bold uppercase">Saldo Previsto</p>
-              <p class="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 mt-0.5">Final do Mês</p>
-            </div>
-          </div>
-
-          <div class="p-3.5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/80 flex items-start gap-3">
-            <i data-lucide="sparkles" class="w-5 h-5 text-indigo-500 shrink-0 mt-0.5"></i>
-            <div class="text-xs text-slate-600 dark:text-slate-300">
-              <strong class="text-slate-900 dark:text-white">Sugestões de Onde Economizar:</strong> A IA analisa seus padrões de consumo e gera recomendações práticas sobre qual categoria está consumindo maior porcentagem da sua renda.
-            </div>
-          </div>
-
-          <div class="pt-2">
-            <button onclick="finishTourAndGoToDashboard()" class="w-full py-3 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 text-white text-sm font-extrabold shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2 transform hover:scale-[1.01]">
-              <span>Pronto para Começar! Acessar Meu Dashboard 🚀</span>
-            </button>
-          </div>
-        </div>
-
       </div>
 
-      <!-- Rodapé do Modal com Navegação e Indicadores -->
-      <div class="p-4 sm:p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        
-        <!-- Dots de Navegação -->
-        <div class="flex items-center gap-1.5 justify-center">
-          <button onclick="jumpToTourStep(1)" class="tour-dot w-3 h-3 rounded-full bg-indigo-600 transition-all"></button>
-          <button onclick="jumpToTourStep(2)" class="tour-dot w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-700 transition-all"></button>
-          <button onclick="jumpToTourStep(3)" class="tour-dot w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-700 transition-all"></button>
-          <button onclick="jumpToTourStep(4)" class="tour-dot w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-700 transition-all"></button>
-          <button onclick="jumpToTourStep(5)" class="tour-dot w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-700 transition-all"></button>
-          <button onclick="jumpToTourStep(6)" class="tour-dot w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-700 transition-all"></button>
+      <!-- Rodapé de Navegação do Tour -->
+      <div class="px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 flex items-center justify-between gap-2">
+        <!-- Dots -->
+        <div class="flex items-center gap-1.5" id="live-tour-dots">
+          <button onclick="goToLiveTourStep(1)" class="live-tour-dot w-3.5 h-1.5 rounded-full bg-indigo-600 transition-all"></button>
+          <button onclick="goToLiveTourStep(2)" class="live-tour-dot w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700 transition-all"></button>
+          <button onclick="goToLiveTourStep(3)" class="live-tour-dot w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700 transition-all"></button>
+          <button onclick="goToLiveTourStep(4)" class="live-tour-dot w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700 transition-all"></button>
+          <button onclick="goToLiveTourStep(5)" class="live-tour-dot w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700 transition-all"></button>
+          <button onclick="goToLiveTourStep(6)" class="live-tour-dot w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700 transition-all"></button>
         </div>
 
-        <!-- Botões de Avançar / Voltar / Pular -->
-        <div class="flex items-center justify-between sm:justify-end gap-2">
-          <button id="btn-tour-prev" onclick="prevTourStep()" disabled class="px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-400 dark:text-slate-500 cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-1">
-            <i data-lucide="chevron-left" class="w-4 h-4"></i>
-            <span>Voltar</span>
+        <!-- Ações: Voltar / Pular / Próximo -->
+        <div class="flex items-center gap-2">
+          <button id="live-tour-btn-prev" onclick="prevLiveTourStep()" class="px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition">
+            Voltar
           </button>
 
-          <button id="btn-tour-skip" onclick="closeTourModal()" class="px-3 py-2 text-xs font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition">
-            Pular Guia
+          <button id="live-tour-btn-skip" onclick="closeLiveTour()" class="hidden sm:inline-block px-2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition">
+            Pular
           </button>
 
-          <button id="btn-tour-next" onclick="nextTourStep()" class="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5">
-            <span>Próximo Passo</span>
-            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          <button id="live-tour-btn-next" onclick="nextLiveTourStep()" class="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition flex items-center gap-1">
+            <span id="live-tour-next-text">Próximo</span>
+            <i id="live-tour-next-icon" data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
           </button>
         </div>
-
       </div>
 
     </div>
+
   </div>
 
   <!-- RODAPÉ -->

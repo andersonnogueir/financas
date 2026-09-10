@@ -171,3 +171,77 @@ body {
   box-shadow: 0 0 15px -3px rgba(99, 102, 241, 0.25);
 }
 
+/* ========================================================
+   GUIA INTERATIVO AO VIVO (LIVE SPOTLIGHT TOUR)
+   ======================================================== */
+#live-tour-container {
+  transition: opacity 0.25s ease;
+}
+
+#spotlight-pulse-ring {
+  box-sizing: border-box;
+  animation: spotlightPulse 2s infinite ease-in-out;
+  pointer-events: none;
+}
+
+@keyframes spotlightPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7), inset 0 0 12px rgba(99, 102, 241, 0.3);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(99, 102, 241, 0), inset 0 0 18px rgba(99, 102, 241, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0), inset 0 0 12px rgba(99, 102, 241, 0.3);
+  }
+}
+
+/* Popover Flutuante do Tour */
+#live-tour-popover {
+  box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.25);
+}
+
+.dark #live-tour-popover {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(99, 102, 241, 0.4);
+}
+
+/* Responsividade Mobile para o Guia ao Vivo */
+@media (max-width: 640px) {
+  #live-tour-popover {
+    left: 12px !important;
+    right: 12px !important;
+    bottom: 16px !important;
+    top: auto !important;
+    width: auto !important;
+    max-width: calc(100vw - 24px) !important;
+    transform: none !important;
+  }
+}
+
+/* ========================================================
+   RESPONSIVIDADE GERAL & MOBILE TOUCH ENHANCEMENTS
+   ======================================================== */
+@media (max-width: 640px) {
+  /* Modais com altura máxima otimizada para telas compactas */
+  .modal-dialog {
+    max-height: 92vh !important;
+  }
+  .modal-body-scroll {
+    max-height: calc(92vh - 130px) !important;
+    overflow-y: auto !important;
+  }
+  
+  /* Tabs com rolagem suave no touch */
+  nav.scrollbar-none {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Tabelas responsivas com indicador de rolagem */
+.table-responsive-container {
+  position: relative;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+

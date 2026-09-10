@@ -2142,22 +2142,36 @@ function setupEventListeners() {
     openModal('modal-import');
   });
 
-  // Tabs
+  // Menu do Usuário & Perfil
+  window.toggleUserMenu = function(forceState) {
+    const dropdown = document.getElementById('user-menu-dropdown');
+    const chevron = document.getElementById('user-menu-chevron');
+    if (!dropdown) return;
+
+    const isHidden = dropdown.classList.contains('hidden');
+    const shouldOpen = forceState !== undefined ? forceState : isHidden;
+
+    if (shouldOpen) {
+      dropdown.classList.remove('hidden');
+      if (chevron) chevron.style.transform = 'rotate(180deg)';
+    } else {
+      dropdown.classList.add('hidden');
+      if (chevron) chevron.style.transform = 'rotate(0deg)';
+    }
+  };
+
+  document.addEventListener('click', (e) => {
+    const container = document.getElementById('user-menu-container');
+    if (container && !container.contains(e.target)) {
+      window.toggleUserMenu(false);
+    }
+  });
+
+  // Tabs de Navegação
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.addEventListener('click', () => {
-      document.querySelectorAll('.nav-tab').forEach(t => {
-        t.className = 'nav-tab flex items-center gap-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 whitespace-nowrap';
-      });
-      tab.className = 'nav-tab active-tab flex items-center gap-2 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 whitespace-nowrap';
-
       const tabTarget = tab.getAttribute('data-tab');
-      state.activeTab = tabTarget;
-
-      document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
-      const activePane = document.getElementById(`tab-${tabTarget}`);
-      if (activePane) activePane.classList.remove('hidden');
-
-      loadAllData();
+      if (tabTarget) switchAppTab(tabTarget);
     });
   });
 
@@ -2786,150 +2800,386 @@ async function adminDeleteClient(userId, userName = 'este cliente') {
 window.adminDeleteClient = adminDeleteClient;
 
 // ========================================================
-// GUIA INTERATIVO DAS FUNCIONALIDADES (TOUR DE ONBOARDING)
+// CONTROLE DE NAVEGAÇÃO DE ABAS
+// ========================================================
+function switchAppTab(tabName) {
+  const targetTabBtn = document.querySelector(`.nav-tab[data-tab="${tabName}"]`);
+  if (targetTabBtn) {
+    document.querySelectorAll('.nav-tab').forEach(t => {
+      t.className = 'nav-tab flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 whitespace-nowrap shrink-0';
+    });
+    targetTabBtn.className = 'nav-tab active-tab flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 whitespace-nowrap shrink-0';
+
+    state.activeTab = tabName;
+
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+    const activePane = document.getElementById(`tab-${tabName}`);
+    if (activePane) activePane.classList.remove('hidden');
+
+    loadAllData();
+  }
+}
+window.switchAppTab = switchAppTab;
+
+// ========================================================
+// GUIA INTERATIVO AO VIVO (LIVE SPOTLIGHT TOUR)
 // ========================================================
 
 state.currentTourStep = 1;
 const TOTAL_TOUR_STEPS = 6;
 
-function openTourModal(step = 1) {
-  state.currentTourStep = step;
-  updateTourUI();
-  openModal('modal-onboarding-tour');
-}
-window.openTourModal = openTourModal;
+const TOUR_STEPS = [
+  {
+    step: 1,
+    tab: 'contas',
+    targetSelector: '#btn-nova-conta-tab',
+    fallbackSelector: '#tab-contas',
+    icon: 'landmark',
+    title: '1. Cadastre suas Contas & Carteiras',
+    desc: 'O primeiro passo é cadastrar onde seu dinheiro fica guardado (Nubank, Itaú, Inter, Poupança, Dinheiro ou Investimentos). O FinFlow consolida todos os saldos em tempo real!',
+    actionLabel: 'Cadastrar Primeira Conta Agora',
+    actionIcon: 'plus',
+    action: () => {
+      closeLiveTour();
+      document.getElementById('btn-quick-new-account')?.click();
+    }
+  },
+  {
+    step: 2,
+    tab: 'transacoes',
+    targetSelector: '#btn-extrato-importar',
+    fallbackSelector: '#btn-open-modal-import',
+    icon: 'file-up',
+    title: '2. Importação com IA (OFX / CSV)',
+    desc: 'Nunca mais digite extratos manualmente! Arraste arquivos .OFX ou .CSV do seu banco. A Inteligência Artificial auto-categoriza tudo em segundos com memória contínua e proteção anti-duplicidade.',
+    actionLabel: 'Abrir Importador Inteligente',
+    actionIcon: 'upload-cloud',
+    action: () => {
+      closeLiveTour();
+      abrirModalImportacao();
+    }
+  },
+  {
+    step: 3,
+    tab: 'transacoes',
+    targetSelector: '#btn-open-modal-lancamento',
+    fallbackSelector: '#tbody-transacoes',
+    icon: 'plus-circle',
+    title: '3. Lançamentos Rápidos & Transferências',
+    desc: 'Lance despesas e receitas do dia a dia com 1 clique (ou aperte a tecla N no teclado). Use "Transferência" para mover saldo entre suas contas sem alterar seu balanço de receitas e despesas!',
+    actionLabel: 'Criar Lançamento de Teste',
+    actionIcon: 'plus-circle',
+    action: () => {
+      closeLiveTour();
+      document.getElementById('btn-open-modal-lancamento')?.click();
+    }
+  },
+  {
+    step: 4,
+    tab: 'recorrencias',
+    targetSelector: '#btn-modal-recorrencia',
+    fallbackSelector: '#tab-recorrencias',
+    icon: 'refresh-cw',
+    title: '4. Contas Fixas & Recorrências',
+    desc: 'Cadastre contas mensais (Aluguel, Luz, Internet, Assinaturas, Salário) uma única vez. O FinFlow gera os lançamentos automaticamente e prevê seu saldo futuro no final do mês!',
+    actionLabel: 'Criar Nova Recorrência',
+    actionIcon: 'refresh-cw',
+    action: () => {
+      closeLiveTour();
+      document.getElementById('btn-modal-recorrencia')?.click();
+    }
+  },
+  {
+    step: 5,
+    tab: 'categorias',
+    targetSelector: '#grid-regras-aprendidas',
+    fallbackSelector: '#btn-nova-categoria-tab',
+    icon: 'tags',
+    title: '5. Categorias & Memória da IA',
+    desc: 'Personalize suas categorias com cores e ícones exclusivos. Acompanhe no painel de memória as regras automáticas que a IA aprendeu a partir das suas correções de extratos.',
+    actionLabel: 'Criar Nova Categoria',
+    actionIcon: 'tags',
+    action: () => {
+      closeLiveTour();
+      document.getElementById('btn-nova-categoria-tab')?.click();
+    }
+  },
+  {
+    step: 6,
+    tab: 'dashboard',
+    targetSelector: '#card-insights-ia-container',
+    fallbackSelector: '#tab-dashboard',
+    icon: 'layout-dashboard',
+    title: '6. Dashboard & Métricas Inteligentes',
+    desc: 'Sua central financeira completa! Acompanhe saldos consolidados, onde você mais gasta por categoria, taxa de economia e sugestões automáticas da IA de onde economizar.',
+    actionLabel: 'Concluir Guia & Ir ao Dashboard 🚀',
+    actionIcon: 'sparkles',
+    action: () => {
+      finishLiveTour();
+    }
+  }
+];
 
-function closeTourModal() {
+let tourResizeHandler = null;
+let tourKeyHandler = null;
+
+function startLiveTour(step = 1) {
+  closeAllModals();
+  const container = document.getElementById('live-tour-container');
+  if (!container) return;
+
+  container.classList.remove('hidden');
+  container.style.opacity = '1';
+
+  goToLiveTourStep(step);
+
+  if (tourKeyHandler) window.removeEventListener('keydown', tourKeyHandler);
+  tourKeyHandler = (e) => {
+    if (e.key === 'Escape') closeLiveTour();
+    if (e.key === 'ArrowRight') nextLiveTourStep();
+    if (e.key === 'ArrowLeft') prevLiveTourStep();
+  };
+  window.addEventListener('keydown', tourKeyHandler);
+
+  if (tourResizeHandler) window.removeEventListener('resize', tourResizeHandler);
+  tourResizeHandler = () => {
+    updateTourSpotlight();
+  };
+  window.addEventListener('resize', tourResizeHandler);
+}
+window.startLiveTour = startLiveTour;
+window.openTourModal = startLiveTour;
+
+function closeLiveTour() {
+  const container = document.getElementById('live-tour-container');
+  if (container) {
+    container.style.opacity = '0';
+    setTimeout(() => container.classList.add('hidden'), 250);
+  }
+
+  const pulseRing = document.getElementById('spotlight-pulse-ring');
+  if (pulseRing) pulseRing.style.display = 'none';
+
+  if (tourKeyHandler) {
+    window.removeEventListener('keydown', tourKeyHandler);
+    tourKeyHandler = null;
+  }
+  if (tourResizeHandler) {
+    window.removeEventListener('resize', tourResizeHandler);
+    tourResizeHandler = null;
+  }
+
   if (state.user && state.user.id) {
     localStorage.setItem(`finflow_tour_seen_${state.user.id}`, 'true');
   }
-  closeModal('modal-onboarding-tour');
 }
-window.closeTourModal = closeTourModal;
+window.closeLiveTour = closeLiveTour;
+window.closeTourModal = closeLiveTour;
 
-function nextTourStep() {
+function goToLiveTourStep(step) {
+  if (step < 1 || step > TOTAL_TOUR_STEPS) return;
+  state.currentTourStep = step;
+  const currentStepData = TOUR_STEPS[step - 1];
+
+  // 1. Troca para a aba real do sistema
+  if (currentStepData.tab && currentStepData.tab !== state.activeTab) {
+    switchAppTab(currentStepData.tab);
+  }
+
+  // 2. Atualiza UI do popover
+  renderTourPopoverUI(currentStepData);
+
+  // 3. Atualiza destaque e posicionamento com breve delay para transição de DOM
+  setTimeout(() => {
+    updateTourSpotlight();
+  }, 120);
+}
+window.goToLiveTourStep = goToLiveTourStep;
+window.jumpToTourStep = goToLiveTourStep;
+
+function nextLiveTourStep() {
   if (state.currentTourStep < TOTAL_TOUR_STEPS) {
-    state.currentTourStep++;
-    updateTourUI();
+    goToLiveTourStep(state.currentTourStep + 1);
   } else {
-    finishTourAndGoToDashboard();
+    finishLiveTour();
   }
 }
-window.nextTourStep = nextTourStep;
+window.nextLiveTourStep = nextLiveTourStep;
+window.nextTourStep = nextLiveTourStep;
 
-function prevTourStep() {
+function prevLiveTourStep() {
   if (state.currentTourStep > 1) {
-    state.currentTourStep--;
-    updateTourUI();
+    goToLiveTourStep(state.currentTourStep - 1);
   }
 }
-window.prevTourStep = prevTourStep;
+window.prevLiveTourStep = prevLiveTourStep;
+window.prevTourStep = prevLiveTourStep;
 
-function jumpToTourStep(step) {
-  if (step >= 1 && step <= TOTAL_TOUR_STEPS) {
-    state.currentTourStep = step;
-    updateTourUI();
+function executeLiveTourAction() {
+  const currentStepData = TOUR_STEPS[state.currentTourStep - 1];
+  if (currentStepData && typeof currentStepData.action === 'function') {
+    currentStepData.action();
   }
 }
-window.jumpToTourStep = jumpToTourStep;
+window.executeLiveTourAction = executeLiveTourAction;
 
-function updateTourUI() {
-  const step = state.currentTourStep;
-  
-  // Atualizar contador e barra de progresso
-  const stepCurrentEl = document.getElementById('tour-step-current');
-  const progressBarEl = document.getElementById('tour-progress-bar');
-  if (stepCurrentEl) stepCurrentEl.textContent = step;
-  if (progressBarEl) {
-    const pct = (step / TOTAL_TOUR_STEPS) * 100;
-    progressBarEl.style.width = `${pct}%`;
+function renderTourPopoverUI(stepData) {
+  const step = stepData.step;
+
+  // Contador e progresso
+  const stepNumEl = document.getElementById('live-tour-step-num');
+  const progressEl = document.getElementById('live-tour-progress');
+  if (stepNumEl) stepNumEl.textContent = step;
+  if (progressEl) {
+    progressEl.style.width = `${(step / TOTAL_TOUR_STEPS) * 100}%`;
   }
 
-  // Alternar slides
-  document.querySelectorAll('.tour-slide').forEach(slide => {
-    const slideNum = parseInt(slide.getAttribute('data-slide'));
-    if (slideNum === step) {
-      slide.classList.remove('hidden');
-      slide.classList.add('fade-in');
-    } else {
-      slide.classList.add('hidden');
-      slide.classList.remove('fade-in');
-    }
-  });
+  // Título e Descrição
+  const titleEl = document.getElementById('live-tour-title');
+  const descEl = document.getElementById('live-tour-desc');
+  const iconEl = document.getElementById('live-tour-icon');
+  if (titleEl) titleEl.textContent = stepData.title;
+  if (descEl) descEl.textContent = stepData.desc;
+  if (iconEl) iconEl.setAttribute('data-lucide', stepData.icon || 'sparkles');
 
-  // Atualizar dots
-  document.querySelectorAll('.tour-dot').forEach((dot, idx) => {
+  // Botão de ação prática
+  const actionLabelEl = document.getElementById('live-tour-action-label');
+  const actionIconEl = document.getElementById('live-tour-action-icon');
+  if (actionLabelEl) actionLabelEl.textContent = stepData.actionLabel;
+  if (actionIconEl) actionIconEl.setAttribute('data-lucide', stepData.actionIcon || 'arrow-right');
+
+  // Dots
+  const dots = document.querySelectorAll('.live-tour-dot');
+  dots.forEach((dot, idx) => {
     if (idx + 1 === step) {
-      dot.className = 'tour-dot w-4 h-2 rounded-full bg-indigo-600 transition-all';
+      dot.className = 'live-tour-dot w-4 h-1.5 rounded-full bg-indigo-600 transition-all cursor-pointer';
     } else {
-      dot.className = 'tour-dot w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-700 hover:bg-indigo-400 transition-all cursor-pointer';
+      dot.className = 'live-tour-dot w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700 hover:bg-indigo-400 transition-all cursor-pointer';
     }
   });
 
   // Botão Voltar
-  const btnPrev = document.getElementById('btn-tour-prev');
+  const btnPrev = document.getElementById('live-tour-btn-prev');
   if (btnPrev) {
     if (step === 1) {
       btnPrev.disabled = true;
-      btnPrev.className = 'px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-300 dark:text-slate-600 cursor-not-allowed transition flex items-center gap-1';
+      btnPrev.className = 'px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-300 dark:text-slate-600 cursor-not-allowed transition';
     } else {
       btnPrev.disabled = false;
-      btnPrev.className = 'px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-1 cursor-pointer';
+      btnPrev.className = 'px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer';
     }
   }
 
   // Botão Próximo / Concluir
-  const btnNext = document.getElementById('btn-tour-next');
+  const nextTextEl = document.getElementById('live-tour-next-text');
+  const nextIconEl = document.getElementById('live-tour-next-icon');
+  const btnNext = document.getElementById('live-tour-btn-next');
+  if (nextTextEl) {
+    nextTextEl.textContent = step === TOTAL_TOUR_STEPS ? 'Concluir' : 'Próximo';
+  }
+  if (nextIconEl) {
+    nextIconEl.setAttribute('data-lucide', step === TOTAL_TOUR_STEPS ? 'sparkles' : 'chevron-right');
+  }
   if (btnNext) {
     if (step === TOTAL_TOUR_STEPS) {
-      btnNext.innerHTML = '<span>Começar a Usar</span> <i data-lucide="sparkles" class="w-4 h-4"></i>';
-      btnNext.className = 'px-5 py-2 text-xs font-extrabold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-90 rounded-xl shadow-md transition flex items-center gap-1.5';
+      btnNext.className = 'px-4 py-1.5 text-xs font-extrabold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-95 rounded-xl shadow-md transition flex items-center gap-1';
     } else {
-      btnNext.innerHTML = '<span>Próximo Passo</span> <i data-lucide="chevron-right" class="w-4 h-4"></i>';
-      btnNext.className = 'px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5';
+      btnNext.className = 'px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/30 transition flex items-center gap-1';
     }
   }
 
   lucide.createIcons();
 }
 
-function tourAction(action) {
-  closeTourModal();
+function updateTourSpotlight() {
+  const currentStepData = TOUR_STEPS[state.currentTourStep - 1];
+  if (!currentStepData) return;
+
+  const targetEl = document.querySelector(currentStepData.targetSelector) ||
+                   document.querySelector(currentStepData.fallbackSelector) ||
+                   document.getElementById(`tab-${currentStepData.tab}`);
+
+  const cutout = document.getElementById('spotlight-cutout');
+  const pulseRing = document.getElementById('spotlight-pulse-ring');
+  const popover = document.getElementById('live-tour-popover');
+
+  if (!targetEl || !cutout || !pulseRing || !popover) return;
+
+  // Rolagem suave até o elemento alvo
+  targetEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
 
   setTimeout(() => {
-    if (action === 'nova-conta') {
-      document.getElementById('btn-quick-new-account')?.click();
-    } else if (action === 'importar') {
-      document.getElementById('btn-open-modal-import')?.click();
-    } else if (action === 'novo-lancamento') {
-      document.getElementById('btn-open-modal-lancamento')?.click();
-    } else if (action === 'tab-recorrencias') {
-      const tabRec = document.querySelector('.nav-tab[data-tab="recorrencias"]');
-      if (tabRec) tabRec.click();
-    } else if (action === 'tab-categorias') {
-      const tabCat = document.querySelector('.nav-tab[data-tab="categorias"]');
-      if (tabCat) tabCat.click();
-    } else if (action === 'dashboard') {
-      const tabDash = document.querySelector('.nav-tab[data-tab="dashboard"]');
-      if (tabDash) tabDash.click();
-    }
-  }, 200);
-}
-window.tourAction = tourAction;
+    const rect = targetEl.getBoundingClientRect();
+    const pad = 10;
 
-function finishTourAndGoToDashboard() {
-  closeTourModal();
-  const tabDash = document.querySelector('.nav-tab[data-tab="dashboard"]');
-  if (tabDash) tabDash.click();
+    const x = Math.max(4, rect.left - pad);
+    const y = Math.max(4, rect.top - pad);
+    const w = Math.min(window.innerWidth - x - 4, rect.width + (pad * 2));
+    const h = rect.height + (pad * 2);
+
+    // Ajustar SVG Cutout
+    cutout.setAttribute('x', x);
+    cutout.setAttribute('y', y);
+    cutout.setAttribute('width', Math.max(10, w));
+    cutout.setAttribute('height', Math.max(10, h));
+    cutout.setAttribute('rx', 14);
+    cutout.setAttribute('ry', 14);
+
+    // Ajustar Pulse Ring
+    pulseRing.style.display = 'block';
+    pulseRing.style.left = `${x}px`;
+    pulseRing.style.top = `${y}px`;
+    pulseRing.style.width = `${w}px`;
+    pulseRing.style.height = `${h}px`;
+
+    // Posicionar Popover em Telas Maiores (no Mobile o CSS media query cuida do bottom fixed)
+    const isMobile = window.innerWidth <= 640;
+    if (!isMobile) {
+      const popoverWidth = 420;
+      const popoverHeight = 240;
+
+      let topPos;
+      if (rect.bottom + popoverHeight + 20 < window.innerHeight) {
+        topPos = rect.bottom + 16;
+      } else if (rect.top - popoverHeight - 20 > 60) {
+        topPos = rect.top - popoverHeight - 16;
+      } else {
+        topPos = Math.max(70, (window.innerHeight - popoverHeight) / 2);
+      }
+
+      let leftPos = rect.left + (rect.width / 2) - (popoverWidth / 2);
+      leftPos = Math.max(16, Math.min(leftPos, window.innerWidth - popoverWidth - 20));
+
+      popover.style.top = `${topPos}px`;
+      popover.style.left = `${leftPos}px`;
+      popover.style.bottom = 'auto';
+      popover.style.right = 'auto';
+      popover.style.transform = 'scale(1)';
+    }
+
+    popover.style.opacity = '1';
+    popover.style.transform = isMobile ? 'none' : 'scale(1)';
+  }, 100);
+}
+
+function finishLiveTour() {
+  closeLiveTour();
+  switchAppTab('dashboard');
+
+  if (state.user && state.user.id) {
+    localStorage.setItem(`finflow_tour_seen_${state.user.id}`, 'true');
+  }
 
   Swal.fire({
     icon: 'success',
     title: 'Tudo pronto para você decolar!',
     html: `
-      <p class="text-sm text-slate-600 dark:text-slate-300">Você pode rever este guia a qualquer momento clicando no botão <b>Guia do Sistema</b> no topo da tela.</p>
+      <p class="text-sm text-slate-600 dark:text-slate-300">Sua conta está configurada e pronta para o uso diário.</p>
+      <p class="text-xs text-slate-500 mt-2">Você pode rever este guia a qualquer momento no seu menu de usuário no topo da tela.</p>
     `,
     confirmButtonColor: '#4f46e5',
-    confirmButtonText: 'Vamos lá!'
+    confirmButtonText: 'Acessar Meu Dashboard 🚀'
   });
 }
-window.finishTourAndGoToDashboard = finishTourAndGoToDashboard;
+window.finishLiveTour = finishLiveTour;
+window.finishTourAndGoToDashboard = finishLiveTour;
