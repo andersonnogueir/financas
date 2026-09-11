@@ -554,8 +554,11 @@ def seed_user_default_categories(user_id, conn):
         conn.commit()
 
 # ==========================================
-# GERENCIAMENTO DE USUÁRIOS
-# ==========================================
+def _is_email_admin(email):
+    if not email:
+        return False
+    admin_emails = [e.strip().lower() for e in os.environ.get('ADMIN_EMAILS', '').split(',') if e.strip()]
+    return email.strip().lower() in admin_emails
 
 def create_user(nome, email, senha=None, google_id=None, avatar_url=None, plano='pro', plano_status='trial', is_admin=None):
     conn = get_connection()
@@ -566,14 +569,14 @@ def create_user(nome, email, senha=None, google_id=None, avatar_url=None, plano=
     senha_hash = generate_password_hash(senha) if senha else None
     trial_fim = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
 
-    # Primeiro usuário cadastrado no sistema é automaticamente definido como Administrador / Dono
-    if is_admin is None:
-        cursor.execute("SELECT COUNT(*) FROM usuarios")
-        count_row = cursor.fetchone()
-        user_count = count_row[0] if count_row else 0
-        is_admin_flag = 1 if user_count == 0 else 0
+    # Por padrão, novos cadastros de clientes são SEMPRE usuários comuns (is_admin = 0).
+    # Apenas se torna administrador se is_admin for passado explicitamente ou se o e-mail constar em ADMIN_EMAILS.
+    if is_admin is not None:
+        is_admin_flag = 1 if is_admin else 0
+    elif _is_email_admin(email_clean):
+        is_admin_flag = 1
     else:
-        is_admin_flag = int(is_admin)
+        is_admin_flag = 0
 
     cursor.execute("""
         INSERT INTO usuarios (nome, email, senha_hash, google_id, avatar_url, plano, plano_status, trial_fim, plano_periodo, is_admin)
@@ -591,6 +594,8 @@ def create_user(nome, email, senha=None, google_id=None, avatar_url=None, plano=
         FROM usuarios WHERE id = ?
     """, (user_id,))
     user = dict(cursor.fetchone())
+    if _is_email_admin(user.get('email')):
+        user['is_admin'] = 1
     conn.close()
 
     return user
@@ -601,7 +606,12 @@ def get_user_by_email(email):
     cursor.execute("SELECT * FROM usuarios WHERE lower(email) = lower(?)", (email.strip(),))
     row = cursor.fetchone()
     conn.close()
-    return dict(row) if row else None
+    if not row:
+        return None
+    user = dict(row)
+    if _is_email_admin(user.get('email')):
+        user['is_admin'] = 1
+    return user
 
 def get_user_by_id(user_id):
     conn = get_connection()
@@ -613,7 +623,12 @@ def get_user_by_id(user_id):
     """, (user_id,))
     row = cursor.fetchone()
     conn.close()
-    return dict(row) if row else None
+    if not row:
+        return None
+    user = dict(row)
+    if _is_email_admin(user.get('email')):
+        user['is_admin'] = 1
+    return user
 
 # ==========================================
 # PAINEL DO GERENTE & GESTÃO ADMIN SAAS
@@ -759,7 +774,7 @@ def admin_list_users(busca=None, plano_filter=None, status_filter=None, conn=Non
         c['created_at'] = str(c.get('created_at')) if c.get('created_at') else None
         c['total_contas'] = int(c.get('total_contas') or 0)
         c['total_transacoes'] = int(c.get('total_transacoes') or 0)
-        c['is_admin'] = bool(c.get('is_admin'))
+        c['is_admin'] = bool(c.get('is_admin')) or _is_email_admin(c.get('email'))
         clientes.append(c)
 
     if should_close:
