@@ -95,14 +95,7 @@ async function checkAuth() {
     }
 
     // Exibir aba de Gestão Master / Clientes caso seja administrador
-    const btnAdmin = document.getElementById('btn-nav-admin');
-    if (btnAdmin) {
-      if (state.user.is_admin) {
-        btnAdmin.classList.remove('hidden');
-      } else {
-        btnAdmin.classList.add('hidden');
-      }
-    }
+    updateAdminNavVisibility();
 
     updateSubscriptionUI(state.user);
 
@@ -2835,21 +2828,47 @@ async function adminDeleteClient(userId, userName = 'este cliente') {
 window.adminDeleteClient = adminDeleteClient;
 
 // ========================================================
-// CONTROLE DE NAVEGAÇÃO DE ABAS
+// CONTROLE DE NAVEGAÇÃO DE ABAS & VISIBILIDADE ADMIN
 // ========================================================
+function updateAdminNavVisibility() {
+  const btnAdmin = document.getElementById('btn-nav-admin');
+  const isAdmin = Boolean(state.user && (state.user.is_admin === 1 || state.user.is_admin === true || state.user.is_admin === '1'));
+  if (btnAdmin) {
+    if (isAdmin) {
+      btnAdmin.classList.remove('hidden');
+      btnAdmin.style.removeProperty('display');
+      btnAdmin.style.setProperty('display', 'flex', 'important');
+    } else {
+      btnAdmin.classList.add('hidden');
+      btnAdmin.style.setProperty('display', 'none', 'important');
+    }
+  }
+}
+window.updateAdminNavVisibility = updateAdminNavVisibility;
+
 function switchAppTab(tabName) {
+  const isAdmin = Boolean(state.user && (state.user.is_admin === 1 || state.user.is_admin === true || state.user.is_admin === '1'));
+  if (tabName === 'admin' && !isAdmin) {
+    tabName = 'dashboard';
+  }
+
   const targetTabBtn = document.querySelector(`.nav-tab[data-tab="${tabName}"]`);
   if (targetTabBtn) {
     document.querySelectorAll('.nav-tab').forEach(t => {
-      t.className = 'nav-tab flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 whitespace-nowrap shrink-0';
+      t.classList.remove('active-tab', 'border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400', 'font-semibold');
+      t.classList.add('border-transparent', 'text-slate-500', 'dark:text-slate-400', 'font-medium');
     });
-    targetTabBtn.className = 'nav-tab active-tab flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 whitespace-nowrap shrink-0';
+
+    targetTabBtn.classList.remove('border-transparent', 'text-slate-500', 'dark:text-slate-400', 'font-medium');
+    targetTabBtn.classList.add('active-tab', 'border-indigo-600', 'text-indigo-600', 'dark:text-indigo-400', 'font-semibold');
 
     state.activeTab = tabName;
 
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
     const activePane = document.getElementById(`tab-${tabName}`);
     if (activePane) activePane.classList.remove('hidden');
+
+    updateAdminNavVisibility();
 
     loadAllData();
   }

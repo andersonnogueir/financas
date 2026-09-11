@@ -557,8 +557,26 @@ def seed_user_default_categories(user_id, conn):
 def _is_email_admin(email):
     if not email:
         return False
-    admin_emails = [e.strip().lower() for e in os.environ.get('ADMIN_EMAILS', '').split(',') if e.strip()]
-    return email.strip().lower() in admin_emails
+    admin_emails_env = os.environ.get('ADMIN_EMAILS', '').strip()
+    if admin_emails_env:
+        admin_emails = [e.strip().lower() for e in admin_emails_env.split(',') if e.strip()]
+        return email.strip().lower() in admin_emails
+    return False
+
+def _enrich_user_admin(user_dict):
+    if not user_dict:
+        return user_dict
+    admin_emails_env = os.environ.get('ADMIN_EMAILS', '').strip()
+    if admin_emails_env:
+        admin_emails = [e.strip().lower() for e in admin_emails_env.split(',') if e.strip()]
+        user_email = (user_dict.get('email') or '').strip().lower()
+        if user_email in admin_emails:
+            user_dict['is_admin'] = 1
+        else:
+            user_dict['is_admin'] = 0
+    else:
+        user_dict['is_admin'] = 1 if user_dict.get('is_admin') else 0
+    return user_dict
 
 def create_user(nome, email, senha=None, google_id=None, avatar_url=None, plano='pro', plano_status='trial', is_admin=None):
     conn = get_connection()
@@ -593,9 +611,7 @@ def create_user(nome, email, senha=None, google_id=None, avatar_url=None, plano=
                gateway, customer_id, subscription_id, plano_periodo, plano_expira_em, is_admin, created_at 
         FROM usuarios WHERE id = ?
     """, (user_id,))
-    user = dict(cursor.fetchone())
-    if _is_email_admin(user.get('email')):
-        user['is_admin'] = 1
+    user = _enrich_user_admin(dict(cursor.fetchone()))
     conn.close()
 
     return user
@@ -608,10 +624,7 @@ def get_user_by_email(email):
     conn.close()
     if not row:
         return None
-    user = dict(row)
-    if _is_email_admin(user.get('email')):
-        user['is_admin'] = 1
-    return user
+    return _enrich_user_admin(dict(row))
 
 def get_user_by_id(user_id):
     conn = get_connection()
@@ -625,10 +638,7 @@ def get_user_by_id(user_id):
     conn.close()
     if not row:
         return None
-    user = dict(row)
-    if _is_email_admin(user.get('email')):
-        user['is_admin'] = 1
-    return user
+    return _enrich_user_admin(dict(row))
 
 # ==========================================
 # PAINEL DO GERENTE & GESTÃO ADMIN SAAS
