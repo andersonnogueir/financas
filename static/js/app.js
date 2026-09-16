@@ -1245,6 +1245,8 @@ function editarTransacao(id) {
   const trans = state.transacoes.find(t => t.id === id);
   if (!trans) return;
 
+  populateContasSelects();
+
   document.getElementById('modal-lancamento-titulo').textContent = 'Editar Lançamento';
   document.getElementById('lancamento-id').value = trans.id;
   document.getElementById('lancamento-descricao').value = trans.descricao;
@@ -1256,13 +1258,16 @@ function editarTransacao(id) {
   setTipoLancamento(trans.tipo);
 
   if (trans.conta_id) {
-    document.getElementById('lancamento-conta').value = trans.conta_id;
+    const selConta = document.getElementById('lancamento-conta') || document.getElementById('lancamento-conta-id');
+    if (selConta) selConta.value = trans.conta_id;
   }
   if (trans.conta_destino_id) {
-    document.getElementById('lancamento-conta-destino').value = trans.conta_destino_id;
+    const selDest = document.getElementById('lancamento-conta-destino');
+    if (selDest) selDest.value = trans.conta_destino_id;
   }
   if (trans.categoria_id) {
-    document.getElementById('lancamento-categoria').value = trans.categoria_id;
+    const selCat = document.getElementById('lancamento-categoria') || document.getElementById('lancamento-categoria-id');
+    if (selCat) selCat.value = trans.categoria_id;
   }
 
   openModal('modal-lancamento');
@@ -2052,8 +2057,8 @@ function abrirModalConta(id = null) {
 }
 window.abrirModalConta = abrirModalConta;
 
-function abrirModalLancamento() {
-  if (state.contas.length === 0) {
+function abrirModalLancamento(tipoDefault = 'despesa') {
+  if (!state.contas || state.contas.length === 0) {
     Swal.fire({
       icon: 'info',
       title: 'Cadastre uma Conta Primeiro',
@@ -2074,7 +2079,9 @@ function abrirModalLancamento() {
   if (idEl) idEl.value = '';
   const dataEl = document.getElementById('lancamento-data');
   if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
-  setTipoLancamento('despesa');
+
+  populateContasSelects();
+  setTipoLancamento(tipoDefault);
   openModal('modal-lancamento');
 }
 window.abrirModalLancamento = abrirModalLancamento;
@@ -2322,11 +2329,21 @@ function setupEventListeners() {
     const descricao = document.getElementById('lancamento-descricao').value;
     const valor = parseFloat(document.getElementById('lancamento-valor').value);
     const data = document.getElementById('lancamento-data').value;
-    const status = tipo === 'transferencia' ? 'pago' : document.getElementById('lancamento-status').value;
-    const contaId = document.getElementById('lancamento-conta').value;
-    const contaDestinoId = tipo === 'transferencia' ? document.getElementById('lancamento-conta-destino').value : null;
-    const categoriaId = tipo !== 'transferencia' ? document.getElementById('lancamento-categoria').value || null : null;
-    const observacoes = document.getElementById('lancamento-observacoes').value;
+    const status = tipo === 'transferencia' ? 'pago' : (document.getElementById('lancamento-status')?.value || 'pago');
+    const contaId = (document.getElementById('lancamento-conta') || document.getElementById('lancamento-conta-id'))?.value;
+    const contaDestinoId = tipo === 'transferencia' ? document.getElementById('lancamento-conta-destino')?.value : null;
+    const categoriaId = tipo !== 'transferencia' ? ((document.getElementById('lancamento-categoria') || document.getElementById('lancamento-categoria-id'))?.value || null) : null;
+    const observacoes = (document.getElementById('lancamento-observacoes') || document.getElementById('lancamento-obs'))?.value || '';
+
+    if (!contaId) {
+      Swal.fire({ icon: 'warning', title: 'Atenção', text: 'Selecione uma conta bancária para o lançamento.' });
+      return;
+    }
+
+    if (tipo === 'transferencia' && !contaDestinoId) {
+      Swal.fire({ icon: 'warning', title: 'Atenção', text: 'Selecione a conta bancária de destino.' });
+      return;
+    }
 
     const payload = { tipo, descricao, valor, data, status, conta_id: contaId, conta_destino_id: contaDestinoId, categoria_id: categoriaId, observacoes };
     const url = id ? `/api/transacoes/${id}` : '/api/transacoes';
