@@ -205,6 +205,10 @@ def _init_postgres_tables(conn):
             integracao_conta TEXT,
             ultimo_sync TEXT,
             sync_auto INTEGER DEFAULT 0,
+            limite_total NUMERIC DEFAULT 0.0,
+            meta_gastos NUMERIC DEFAULT 0.0,
+            dia_fechamento INTEGER DEFAULT 25,
+            dia_vencimento INTEGER DEFAULT 5,
             ativo INTEGER NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -276,7 +280,11 @@ def _migrate_postgres_tables(conn):
         ("integracao_item_id", "TEXT"),
         ("integracao_account_id", "TEXT"),
         ("ultimo_sync", "TEXT"),
-        ("sync_auto", "INTEGER DEFAULT 0")
+        ("sync_auto", "INTEGER DEFAULT 0"),
+        ("limite_total", "NUMERIC DEFAULT 0.0"),
+        ("meta_gastos", "NUMERIC DEFAULT 0.0"),
+        ("dia_fechamento", "INTEGER DEFAULT 25"),
+        ("dia_vencimento", "INTEGER DEFAULT 5")
     ]
     for col_name, col_def in cols_contas:
         try:
@@ -341,7 +349,11 @@ def _migrate_sqlite_tables(conn):
         ("integracao_item_id", "TEXT"),
         ("integracao_account_id", "TEXT"),
         ("ultimo_sync", "TEXT"),
-        ("sync_auto", "INTEGER DEFAULT 0")
+        ("sync_auto", "INTEGER DEFAULT 0"),
+        ("limite_total", "REAL DEFAULT 0.0"),
+        ("meta_gastos", "REAL DEFAULT 0.0"),
+        ("dia_fechamento", "INTEGER DEFAULT 25"),
+        ("dia_vencimento", "INTEGER DEFAULT 5")
     ]
     for col_name, col_def in cols_contas:
         if col_name not in existing_cols:
@@ -449,6 +461,10 @@ def _init_sqlite_tables(conn):
             integracao_conta TEXT,
             ultimo_sync TEXT,
             sync_auto INTEGER DEFAULT 0,
+            limite_total REAL DEFAULT 0.0,
+            meta_gastos REAL DEFAULT 0.0,
+            dia_fechamento INTEGER DEFAULT 25,
+            dia_vencimento INTEGER DEFAULT 5,
             ativo INTEGER NOT NULL DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
@@ -1200,9 +1216,15 @@ def calculate_account_balances(user_id, conn=None):
     cursor.execute("SELECT * FROM contas WHERE user_id = ? AND ativo = 1 ORDER BY nome ASC", (user_id,))
     contas = [dict(row) for row in cursor.fetchall()]
 
+    import unicodedata
+    def _norm(txt):
+        return ''.join(c for c in unicodedata.normalize('NFD', (txt or '').lower()) if unicodedata.category(c) != 'Mn').strip()
+
     for conta in contas:
         cid = conta['id']
-        saldo = float(conta['saldo_inicial'])
+        saldo = float(conta.get('saldo_inicial') or 0.0)
+        tipo_norm = _norm(conta.get('tipo', ''))
+        is_cartao = 'cartao' in tipo_norm
 
         cursor.execute("""
             SELECT COALESCE(SUM(valor), 0) FROM transacoes
@@ -1228,9 +1250,56 @@ def calculate_account_balances(user_id, conn=None):
         """, (user_id, cid))
         transf_recebidas = float(cursor.fetchone()[0])
 
-        conta['saldo_atual'] = round(saldo + receitas_pagas - despesas_pagas - transf_enviadas + transf_recebidas, 2)
+        limite_total = float(conta.get('limite_total') or 0.0)
+        meta_gastos = float(conta.get('meta_gastos') or 0.0)
+        dia_fechamento = int(conta.get('dia_fechamento') or 25)
+        dia_vencimento = int(conta.get('dia_vencimento') or 5)
+
+        conta['limite_total'] = limite_total
+        conta['meta_gastos'] = meta_gastos
+        conta['dia_fechamento'] = dia_fechamento
+        conta['dia_vencimento'] = dia_vencimento
+        conta['is_cartao'] = is_cartao
         conta['receitas_pagas'] = round(receitas_pagas, 2)
         conta['despesas_pagas'] = round(despesas_pagas, 2)
+
+        if is_cartao:
+            # Em cartão de crédito:
+            # - Despesas aumentam a fatura atual.
+            # - Receitas / Transferências recebidas na conta do cartão abatem a fatura.
+            fatura_atual = round(max(0.0, despesas_pagas + transf_enviadas - receitas_pagas - transf_recebidas), 2)
+            limite_disponivel = round(max(0.0, limite_total - fatura_atual), 2) if limite_total > 0 else 0.0
+            
+            percentual_meta = round((fatura_atual / meta_gastos * 100), 1) if meta_gastos > 0 else 0.0
+            saldo_restante_meta = round(max(0.0, meta_gastos - fatura_atual), 2) if meta_gastos > 0 else 0.0
+            valor_extrapolado = round(max(0.0, fatura_atual - meta_gastos), 2) if meta_gastos > 0 and fatura_atual > meta_gastos else 0.0
+
+            if meta_gastos <= 0:
+                status_meta = 'sem_meta'
+            elif fatura_atual > meta_gastos:
+                status_meta = 'extrapolado'
+            elif percentual_meta >= 90.0:
+                status_meta = 'alerta'
+            elif percentual_meta >= 70.0:
+                status_meta = 'atencao'
+            else:
+                status_meta = 'ok'
+
+            conta['saldo_atual'] = -fatura_atual
+            conta['fatura_atual'] = fatura_atual
+            conta['limite_disponivel'] = limite_disponivel
+            conta['percentual_meta'] = percentual_meta
+            conta['saldo_restante_meta'] = saldo_restante_meta
+            conta['valor_extrapolado'] = valor_extrapolado
+            conta['status_meta'] = status_meta
+        else:
+            conta['saldo_atual'] = round(saldo + receitas_pagas - despesas_pagas - transf_enviadas + transf_recebidas, 2)
+            conta['fatura_atual'] = 0.0
+            conta['limite_disponivel'] = 0.0
+            conta['percentual_meta'] = 0.0
+            conta['saldo_restante_meta'] = 0.0
+            conta['valor_extrapolado'] = 0.0
+            conta['status_meta'] = 'n/a'
 
     if should_close:
         conn.close()

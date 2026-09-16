@@ -729,6 +729,142 @@ class TestFinFlowBankImport(unittest.TestCase):
 
         print("OK: Importação de transferência entre contas com impacto perfeito nos saldos de origem e destino validada!")
 
+    def test_19_credit_card_account_and_spending_goal_intelligence(self):
+        # 1. Logar como usuário
+        self.app.post('/api/auth/login', json={
+            "email": "anderson.import@exemplo.com",
+            "senha": "senhaSegura123"
+        })
+        user = database.get_user_by_email("anderson.import@exemplo.com")
+
+        # 2. Cadastrar uma conta do tipo Cartão de Crédito com limite e meta de gastos
+        res_card = self.app.post('/api/contas', json={
+            "nome": "Cartão Inter Black",
+            "instituicao": "Banco Inter",
+            "tipo": "Cartão de Crédito",
+            "saldo_inicial": 0.0,
+            "limite_total": 5000.00,
+            "meta_gastos": 2000.00,
+            "dia_fechamento": 25,
+            "dia_vencimento": 5,
+            "cor": "#1e293b"
+        })
+        self.assertEqual(res_card.status_code, 201)
+        card_data = json.loads(res_card.data)
+        card_id = card_data['id']
+
+        # 3. Verificar métricas iniciais do cartão
+        contas = database.get_contas_by_user(user['id'])
+        card = next((c for c in contas if c['id'] == card_id), None)
+        self.assertIsNotNone(card)
+        self.assertTrue(card['is_cartao'])
+        self.assertEqual(card['fatura_atual'], 0.0)
+        self.assertEqual(card['limite_total'], 5000.00)
+        self.assertEqual(card['limite_disponivel'], 5000.00)
+        self.assertEqual(card['meta_gastos'], 2000.00)
+        self.assertEqual(card['percentual_meta'], 0.0)
+        self.assertEqual(card['status_meta'], 'ok')
+
+        # 4. Criar uma despesa avulsa no cartão de R$ 1.500,00 (75% da meta)
+        res_desp = self.app.post('/api/transacoes', json={
+            "tipo": "despesa",
+            "descricao": "Passagem Aérea Férias",
+            "valor": 1500.00,
+            "data": "2026-08-10",
+            "conta_id": card_id,
+            "status": "pago"
+        })
+        self.assertEqual(res_desp.status_code, 201)
+
+        # 5. Verificar atualização de status do cartão (atenção: >= 70%)
+        contas = database.get_contas_by_user(user['id'])
+        card = next((c for c in contas if c['id'] == card_id), None)
+        self.assertEqual(card['fatura_atual'], 1500.00)
+        self.assertEqual(card['limite_disponivel'], 3500.00)
+        self.assertEqual(card['percentual_meta'], 75.0)
+        self.assertEqual(card['status_meta'], 'atencao')
+        self.assertEqual(card['saldo_restante_meta'], 500.00)
+
+        # 6. Simular importação de extrato/fatura do cartão com R$ 700,00 de despesas adicionais
+        ofx_card = """<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>
+        <STMTTRN>
+            <TRNTYPE>DEBIT</TRNTYPE>
+            <DTPOSTED>20260815120000[-03:EST]</DTPOSTED>
+            <TRNAMT>-700.00</TRNAMT>
+            <FITID>OFX-CARD-EXP-20260815-001</FITID>
+            <MEMO>HOTEL POUSADA DA SERRA</MEMO>
+        </STMTTRN>
+        </BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>"""
+
+        res_preview = self.app.post('/api/import/preview', data={
+            'conta_id': str(card_id),
+            'arquivo': (io.BytesIO(ofx_card.encode('utf-8')), 'fatura_inter.ofx')
+        }, content_type='multipart/form-data')
+
+        self.assertEqual(res_preview.status_code, 200)
+        preview_data = json.loads(res_preview.data)
+        self.assertTrue(preview_data['success'])
+
+        # Verificar se o alerta inteligente de meta de gastos foi acionado na prévia
+        alerta = preview_data.get('alerta_meta_gastos')
+        self.assertIsNotNone(alerta)
+        self.assertTrue(alerta['extrapolado'])
+        self.assertEqual(alerta['fatura_atual'], 1500.00)
+        self.assertEqual(alerta['novas_despesas'], 700.00)
+        self.assertEqual(alerta['fatura_projetada'], 2200.00)
+        self.assertEqual(alerta['percentual_projetado'], 110.0)
+        self.assertEqual(alerta['valor_extrapolado'], 200.00)
+        self.assertEqual(alerta['status_alerta'], 'extrapolado')
+
+        # 7. Confirmar a importação da fatura
+        res_confirm = self.app.post('/api/import/confirm', json={
+            "conta_id": card_id,
+            "transacoes": [
+                {
+                    "data": "2026-08-15",
+                    "descricao": "HOTEL POUSADA DA SERRA",
+                    "valor": 700.00,
+                    "tipo": "despesa",
+                    "categoria_id": 6,
+                    "fitid": "OFX-CARD-EXP-20260815-001"
+                }
+            ]
+        })
+        self.assertEqual(res_confirm.status_code, 200)
+
+        # 8. Verificar métricas consolidadas após importação (fatura extrapolada)
+        contas = database.get_contas_by_user(user['id'])
+        card = next((c for c in contas if c['id'] == card_id), None)
+        self.assertEqual(card['fatura_atual'], 2200.00)
+        self.assertEqual(card['limite_disponivel'], 2800.00)
+        self.assertEqual(card['percentual_meta'], 110.0)
+        self.assertEqual(card['status_meta'], 'extrapolado')
+        self.assertEqual(card['valor_extrapolado'], 200.00)
+
+        # 9. Atualizar a meta de gastos para R$ 3.000,00 e verificar se volta para status seguro
+        res_update = self.app.put(f'/api/contas/{card_id}', json={
+            "nome": "Cartão Inter Black",
+            "instituicao": "Banco Inter",
+            "tipo": "Cartão de Crédito",
+            "saldo_inicial": 0.0,
+            "limite_total": 5000.00,
+            "meta_gastos": 3000.00,
+            "dia_fechamento": 25,
+            "dia_vencimento": 5,
+            "cor": "#1e293b"
+        })
+        self.assertEqual(res_update.status_code, 200)
+
+        contas = database.get_contas_by_user(user['id'])
+        card = next((c for c in contas if c['id'] == card_id), None)
+        self.assertEqual(card['meta_gastos'], 3000.00)
+        self.assertEqual(card['percentual_meta'], 73.3)
+        self.assertEqual(card['status_meta'], 'atencao')
+        self.assertEqual(card['saldo_restante_meta'], 800.00)
+        self.assertEqual(card['valor_extrapolado'], 0.0)
+
+        print("OK: Cadastro de Cartão de Crédito, cálculo de fatura, limites, meta de gastos inteligente e alertas de importação validados com sucesso!")
+
 if __name__ == '__main__':
     unittest.main()
 

@@ -538,7 +538,9 @@ function populateContasSelects() {
     }
 
     state.contas.forEach(c => {
-      html += `<option value="${c.id}">${c.nome} (${formatBRL(c.saldo_atual)})</option>`;
+      const isCard = c.is_cartao || (c.tipo || '').toLowerCase().includes('cart');
+      const infoText = isCard ? `Cartão - Fatura: ${formatBRL(c.fatura_atual || 0)}` : formatBRL(c.saldo_atual);
+      html += `<option value="${c.id}">${c.nome} (${infoText})</option>`;
     });
 
     select.innerHTML = html;
@@ -1474,6 +1476,41 @@ function renderImportPreviewTable(previewData) {
     }
   }
 
+  // Alerta de Meta de Gastos Inteligente para Cartão de Crédito
+  const metaAlertEl = document.getElementById('import-preview-meta-alert');
+  if (metaAlertEl) {
+    if (previewData.alerta_meta_gastos) {
+      const a = previewData.alerta_meta_gastos;
+      let alertBoxClass = 'bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200';
+      let alertIcon = 'alert-triangle';
+      let title = `Atenção: Meta de Gastos do Cartão (${a.percentual_projetado}% atingido)`;
+
+      if (a.extrapolado) {
+        alertBoxClass = 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200';
+        alertIcon = 'shield-alert';
+        title = `🚨 Meta de Gastos Ultrapassada em ${formatBRL(a.valor_extrapolado)}!`;
+      } else if (a.status_alerta === 'ok') {
+        alertBoxClass = 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200';
+        alertIcon = 'check-circle';
+        title = `🟢 Gastos Dentro da Meta (${a.percentual_projetado}% atingido)`;
+      }
+
+      metaAlertEl.className = `mx-4 mt-3 p-3.5 rounded-xl border flex items-center gap-3 text-xs fade-in ${alertBoxClass}`;
+      metaAlertEl.innerHTML = `
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${a.extrapolado ? 'bg-rose-500 text-white' : 'bg-indigo-600 text-white'}">
+          <i data-lucide="${alertIcon}" class="w-4 h-4"></i>
+        </div>
+        <div class="flex-1">
+          <p class="font-bold text-xs">${title}</p>
+          <p class="text-[11px] mt-0.5 opacity-90">${a.mensagem} (Fatura Atual: ${formatBRL(a.fatura_atual)} + Importação: ${formatBRL(a.novas_despesas)} = Projetada: ${formatBRL(a.fatura_projetada)} de ${formatBRL(a.meta_gastos)})</p>
+        </div>
+      `;
+      metaAlertEl.classList.remove('hidden');
+    } else {
+      metaAlertEl.classList.add('hidden');
+    }
+  }
+
   if (!tbody) return;
 
   tbody.innerHTML = previewData.transacoes.map((t, idx) => {
@@ -2036,6 +2073,120 @@ function renderContasTab() {
 
   container.innerHTML = state.contas.map(c => {
     const isConectada = c.integracao_status === 'conectado';
+    const isCartao = c.is_cartao || (c.tipo || '').toLowerCase().includes('cart');
+
+    if (isCartao) {
+      const pctMeta = Math.min(100, Math.max(0, c.percentual_meta || 0));
+      const hasMeta = (c.meta_gastos || 0) > 0;
+      
+      let barColor = 'bg-emerald-500';
+      let metaBadgeText = `🟢 Saudável: ${c.percentual_meta}% (${formatBRL(c.saldo_restante_meta)} disponíveis)`;
+      let metaBadgeClass = 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800';
+
+      if (c.status_meta === 'extrapolado') {
+        barColor = 'bg-rose-600 animate-pulse';
+        metaBadgeText = `🚨 Teto Ultrapassado em ${formatBRL(c.valor_extrapolado)}!`;
+        metaBadgeClass = 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 font-bold';
+      } else if (c.status_meta === 'alerta') {
+        barColor = 'bg-orange-500';
+        metaBadgeText = `⚠️ Alerta: ${c.percentual_meta}% consumido (${formatBRL(c.saldo_restante_meta)} restantes)`;
+        metaBadgeClass = 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/60 border-orange-200 dark:border-orange-800 font-semibold';
+      } else if (c.status_meta === 'atencao') {
+        barColor = 'bg-amber-500';
+        metaBadgeText = `🟡 Atenção: ${c.percentual_meta}% consumido (${formatBRL(c.saldo_restante_meta)} restantes)`;
+        metaBadgeClass = 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800 font-medium';
+      }
+
+      return `
+      <div class="bank-card bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between" style="--account-color: ${c.cor};">
+        <div>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold shadow-md" style="background-color: ${c.cor};">
+                <i data-lucide="credit-card" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="font-bold text-slate-900 dark:text-white">${c.nome}</h3>
+                  <span class="text-[9px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-extrabold uppercase tracking-wider">Cartão</span>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">${c.instituicao || ''} &bull; Fecha dia ${c.dia_fechamento || 25} &bull; Vence dia ${c.dia_vencimento || 5}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-1">
+              <button onclick="editarConta(${c.id})" title="Editar Cartão" class="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg">
+                <i data-lucide="pencil" class="w-4 h-4"></i>
+              </button>
+              <button onclick="excluirConta(${c.id})" title="Desativar Cartão" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Botão Ação Rápida: Importar Fatura OFX/CSV -->
+          <div class="mt-3.5">
+            <button onclick="abrirModalImportacao(${c.id})" class="w-full py-2 px-3 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-xl border border-indigo-200/60 dark:border-indigo-800/40 transition flex items-center justify-center gap-1.5 shadow-sm">
+              <i data-lucide="file-up" class="w-3.5 h-3.5"></i>
+              <span>Importar Fatura / Extrato (OFX / CSV)</span>
+            </button>
+          </div>
+
+          <!-- Barra de Monitoramento Inteligente de Meta de Gastos -->
+          ${hasMeta ? `
+            <div class="mt-4 p-3 rounded-xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800/80 space-y-1.5">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                  <i data-lucide="target" class="w-3.5 h-3.5 text-indigo-500"></i>
+                  Meta de Gastos:
+                </span>
+                <span class="font-black text-slate-900 dark:text-white">${formatBRL(c.meta_gastos)}</span>
+              </div>
+              <div class="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                <div class="${barColor} h-full rounded-full transition-all duration-500" style="width: ${pctMeta}%;"></div>
+              </div>
+              <div class="pt-0.5">
+                <span class="text-[10px] px-2 py-0.5 rounded-md border inline-block ${metaBadgeClass}">
+                  ${metaBadgeText}
+                </span>
+              </div>
+            </div>
+          ` : `
+            <div class="mt-4 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700/60 text-center">
+              <p class="text-[11px] text-slate-400">💡 Defina uma meta de gastos para ativar o monitoramento inteligente do cartão.</p>
+            </div>
+          `}
+
+          <div class="mt-3.5 pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-1.5">
+            ${c.limite_total > 0 ? `
+              <div class="flex justify-between text-xs">
+                <span class="text-slate-500">Limite Total:</span>
+                <span class="font-medium text-slate-700 dark:text-slate-300">${formatBRL(c.limite_total)}</span>
+              </div>
+              <div class="flex justify-between text-xs">
+                <span class="text-slate-500">Limite Disponível:</span>
+                <span class="font-bold text-emerald-600 dark:text-emerald-400">${formatBRL(c.limite_disponivel)}</span>
+              </div>
+            ` : ''}
+            <div class="flex justify-between text-xs">
+              <span class="text-slate-500">Despesas no Cartão:</span>
+              <span class="font-medium text-rose-500">-${formatBRL(c.despesas_pagas || 0)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <div>
+            <span class="text-xs font-semibold text-slate-500">Fatura Atual:</span>
+            <p class="text-[10px] text-slate-400">Total a pagar</p>
+          </div>
+          <span class="text-xl font-extrabold text-rose-600 dark:text-rose-400">
+            ${formatBRL(c.fatura_atual || 0)}
+          </span>
+        </div>
+      </div>
+      `;
+    }
+
     return `
     <div class="bank-card bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between" style="--account-color: ${c.cor};">
       <div>
@@ -2100,7 +2251,8 @@ function editarConta(id) {
   const conta = state.contas.find(c => c.id === id);
   if (!conta) return;
 
-  document.getElementById('modal-conta-titulo').textContent = 'Editar Conta Bancária';
+  const isCartao = (conta.tipo || '').toLowerCase().includes('cart');
+  document.getElementById('modal-conta-titulo').textContent = isCartao ? 'Editar Cartão de Crédito' : 'Editar Conta Bancária';
   document.getElementById('conta-id').value = conta.id;
   document.getElementById('conta-nome').value = conta.nome;
   document.getElementById('conta-instituicao').value = conta.instituicao || '';
@@ -2109,10 +2261,26 @@ function editarConta(id) {
   document.getElementById('conta-cor').value = conta.cor || '#3b82f6';
   document.getElementById('conta-cor-label').textContent = conta.cor || '#3b82f6';
 
+  const camposCartao = document.getElementById('campos-cartao-credito');
+  if (camposCartao) {
+    if (isCartao) {
+      camposCartao.classList.remove('hidden');
+    } else {
+      camposCartao.classList.add('hidden');
+    }
+  }
+
+  const limiteEl = document.getElementById('conta-limite-total');
+  if (limiteEl) limiteEl.value = conta.limite_total || '';
+  const metaEl = document.getElementById('conta-meta-gastos');
+  if (metaEl) metaEl.value = conta.meta_gastos || '';
+  const fechamentoEl = document.getElementById('conta-dia-fechamento');
+  if (fechamentoEl) fechamentoEl.value = conta.dia_fechamento || 25;
+  const vencimentoEl = document.getElementById('conta-dia-vencimento');
+  if (vencimentoEl) vencimentoEl.value = conta.dia_vencimento || 5;
+
   openModal('modal-conta');
 }
-
-
 
 async function excluirConta(id) {
   const result = await Swal.fire({
@@ -2266,6 +2434,18 @@ function abrirModalConta(id = null) {
   if (corEl) corEl.value = '#3b82f6';
   const corLabel = document.getElementById('conta-cor-label');
   if (corLabel) corLabel.textContent = '#3b82f6';
+
+  const camposCartao = document.getElementById('campos-cartao-credito');
+  if (camposCartao) camposCartao.classList.add('hidden');
+  const limiteEl = document.getElementById('conta-limite-total');
+  if (limiteEl) limiteEl.value = '';
+  const metaEl = document.getElementById('conta-meta-gastos');
+  if (metaEl) metaEl.value = '';
+  const fechamentoEl = document.getElementById('conta-dia-fechamento');
+  if (fechamentoEl) fechamentoEl.value = '25';
+  const vencimentoEl = document.getElementById('conta-dia-vencimento');
+  if (vencimentoEl) vencimentoEl.value = '5';
+
   openModal('modal-conta');
 }
 window.abrirModalConta = abrirModalConta;
@@ -2508,6 +2688,18 @@ function setupEventListeners() {
     document.getElementById('conta-cor-label').textContent = e.target.value;
   });
 
+  document.getElementById('conta-tipo')?.addEventListener('change', (e) => {
+    const isCartao = (e.target.value || '').toLowerCase().includes('cart');
+    const camposCartao = document.getElementById('campos-cartao-credito');
+    if (camposCartao) {
+      if (isCartao) {
+        camposCartao.classList.remove('hidden');
+      } else {
+        camposCartao.classList.add('hidden');
+      }
+    }
+  });
+
   document.querySelectorAll('.btn-close-modal').forEach(btn => {
     btn.addEventListener('click', closeAllModals);
   });
@@ -2622,6 +2814,11 @@ function setupEventListeners() {
     const cor = document.getElementById('conta-cor').value;
     const bancoId = document.getElementById('conta-banco-id')?.value || null;
 
+    const limiteTotal = parseFloat(document.getElementById('conta-limite-total')?.value) || 0;
+    const metaGastos = parseFloat(document.getElementById('conta-meta-gastos')?.value) || 0;
+    const diaFechamento = parseInt(document.getElementById('conta-dia-fechamento')?.value) || 25;
+    const diaVencimento = parseInt(document.getElementById('conta-dia-vencimento')?.value) || 5;
+
     const payload = { 
       nome, 
       instituicao, 
@@ -2630,7 +2827,11 @@ function setupEventListeners() {
       cor,
       banco_id: bancoId,
       integracao_status: bancoId ? 'conectado' : 'desconectado',
-      integracao_tipo: bancoId ? 'open_finance_sandbox' : 'manual'
+      integracao_tipo: bancoId ? 'open_finance_sandbox' : 'manual',
+      limite_total: limiteTotal,
+      meta_gastos: metaGastos,
+      dia_fechamento: diaFechamento,
+      dia_vencimento: diaVencimento
     };
     const url = id ? `/api/contas/${id}` : '/api/contas';
     const method = id ? 'PUT' : 'POST';

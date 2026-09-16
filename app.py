@@ -849,16 +849,20 @@ def create_conta():
 
     instituicao = data.get("instituicao", "").strip() or nome
     tipo = data.get("tipo", "Corrente")
-    saldo_inicial = float(data.get("saldo_inicial", 0.0))
+    saldo_inicial = float(data.get("saldo_inicial", 0.0) or 0.0)
     cor = data.get("cor", "#3b82f6")
     icone = data.get("icone", "wallet")
+    limite_total = float(data.get("limite_total", 0.0) or 0.0)
+    meta_gastos = float(data.get("meta_gastos", 0.0) or 0.0)
+    dia_fechamento = int(data.get("dia_fechamento", 25) or 25)
+    dia_vencimento = int(data.get("dia_vencimento", 5) or 5)
 
     conn = database.get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO contas (user_id, nome, instituicao, tipo, saldo_inicial, cor, icone)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (user_id, nome, instituicao, tipo, saldo_inicial, cor, icone))
+        INSERT INTO contas (user_id, nome, instituicao, tipo, saldo_inicial, cor, icone, limite_total, meta_gastos, dia_fechamento, dia_vencimento)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, nome, instituicao, tipo, saldo_inicial, cor, icone, limite_total, meta_gastos, dia_fechamento, dia_vencimento))
     conn.commit()
     novo_id = cursor.lastrowid
     conn.close()
@@ -876,17 +880,22 @@ def update_conta(conta_id):
 
     instituicao = data.get("instituicao", "").strip() or nome
     tipo = data.get("tipo", "Corrente")
-    saldo_inicial = float(data.get("saldo_inicial", 0.0))
+    saldo_inicial = float(data.get("saldo_inicial", 0.0) or 0.0)
     cor = data.get("cor", "#3b82f6")
     icone = data.get("icone", "wallet")
+    limite_total = float(data.get("limite_total", 0.0) or 0.0)
+    meta_gastos = float(data.get("meta_gastos", 0.0) or 0.0)
+    dia_fechamento = int(data.get("dia_fechamento", 25) or 25)
+    dia_vencimento = int(data.get("dia_vencimento", 5) or 5)
 
     conn = database.get_connection()
     cursor = conn.cursor()
     cursor.execute("""
         UPDATE contas 
-        SET nome = ?, instituicao = ?, tipo = ?, saldo_inicial = ?, cor = ?, icone = ?
+        SET nome = ?, instituicao = ?, tipo = ?, saldo_inicial = ?, cor = ?, icone = ?,
+            limite_total = ?, meta_gastos = ?, dia_fechamento = ?, dia_vencimento = ?
         WHERE id = ? AND user_id = ?
-    """, (nome, instituicao, tipo, saldo_inicial, cor, icone, conta_id, user_id))
+    """, (nome, instituicao, tipo, saldo_inicial, cor, icone, limite_total, meta_gastos, dia_fechamento, dia_vencimento, conta_id, user_id))
 
     conn.commit()
     conn.close()
@@ -1279,6 +1288,47 @@ def import_preview():
 
     total_duplicadas = sum(1 for t in transacoes_processadas if t['is_duplicada'])
 
+    # Inteligência de Meta de Gastos para Cartão de Crédito
+    conta_selecionada = next((c for c in contas_usuario if str(c['id']) == str(conta_id)), None)
+    alerta_meta_gastos = None
+    if conta_selecionada and (conta_selecionada.get('is_cartao') or 'cartao' in (conta_selecionada.get('tipo', '').lower())):
+        meta = float(conta_selecionada.get('meta_gastos') or 0.0)
+        limite = float(conta_selecionada.get('limite_total') or 0.0)
+        fatura_atual = float(conta_selecionada.get('fatura_atual') or 0.0)
+        
+        novas_despesas = sum(t['valor'] for t in transacoes_processadas if t['tipo_original'] == 'despesa' and not t['is_duplicada'])
+        novas_receitas = sum(t['valor'] for t in transacoes_processadas if t['tipo_original'] == 'receita' and not t['is_duplicada'])
+        fatura_projetada = round(max(0.0, fatura_atual + novas_despesas - novas_receitas), 2)
+        
+        if meta > 0:
+            pct_projetado = round((fatura_projetada / meta * 100), 1)
+            extrapolado = fatura_projetada > meta
+            valor_extrapolado = round(fatura_projetada - meta, 2) if extrapolado else 0.0
+            
+            if extrapolado:
+                status_alerta = 'extrapolado'
+            elif pct_projetado >= 90.0:
+                status_alerta = 'alerta'
+            elif pct_projetado >= 70.0:
+                status_alerta = 'atencao'
+            else:
+                status_alerta = 'ok'
+            
+            alerta_meta_gastos = {
+                "conta_id": conta_selecionada['id'],
+                "conta_nome": conta_selecionada['nome'],
+                "meta_gastos": meta,
+                "limite_total": limite,
+                "fatura_atual": fatura_atual,
+                "novas_despesas": round(novas_despesas, 2),
+                "fatura_projetada": fatura_projetada,
+                "percentual_projetado": pct_projetado,
+                "extrapolado": extrapolado,
+                "valor_extrapolado": valor_extrapolado,
+                "status_alerta": status_alerta,
+                "mensagem": f"⚠️ Esta importação fará a fatura atingir R$ {fatura_projetada:.2f} ({pct_projetado}% do teto de R$ {meta:.2f})." if extrapolado else f"A fatura projetada após a importação será de R$ {fatura_projetada:.2f} ({pct_projetado}% do teto de R$ {meta:.2f})."
+            }
+
     return jsonify({
         "success": True,
         "filename": file.filename,
@@ -1289,7 +1339,8 @@ def import_preview():
         "total_receitas": round(total_receitas, 2),
         "transacoes": transacoes_processadas,
         "recorrencias_disponiveis": candidatos_recorrencias.get('recorrencias', []),
-        "contas_disponiveis": [{"id": c['id'], "nome": c['nome'], "tipo": c['tipo'], "instituicao": c.get('instituicao', ''), "cor": c.get('cor', '#6366f1')} for c in contas_usuario]
+        "contas_disponiveis": [{"id": c['id'], "nome": c['nome'], "tipo": c['tipo'], "instituicao": c.get('instituicao', ''), "cor": c.get('cor', '#6366f1')} for c in contas_usuario],
+        "alerta_meta_gastos": alerta_meta_gastos
     })
 
 @app.route("/api/import/confirm", methods=["POST"])
