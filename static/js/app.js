@@ -1454,6 +1454,8 @@ function renderImportPreviewTable(previewData) {
   const despEl = document.getElementById('import-preview-desp');
   const btnConfirmLbl = document.getElementById('lbl-btn-confirm-import');
 
+  state.import.recorrenciasDisponiveis = previewData.recorrencias_disponiveis || [];
+
   if (statsEl) statsEl.textContent = `${previewData.total_transacoes} lançamentos encontrados`;
   if (recEl) recEl.textContent = `+${formatBRL(previewData.total_receitas)}`;
   if (despEl) despEl.textContent = `-${formatBRL(previewData.total_despesas)}`;
@@ -1471,14 +1473,30 @@ function renderImportPreviewTable(previewData) {
       <option value="${c.id}" ${c.id === t.categoria_id ? 'selected' : ''}>${c.nome}</option>
     `).join('');
 
-    // Badge de origem da sugestão
+    // Opções de recorrências filtradas por tipo
+    const recsForType = (state.import.recorrenciasDisponiveis || []).filter(r => r.tipo === t.tipo);
+    const recOptionsHtml = recsForType.map(r => `
+      <option value="${r.recorrencia_id}" ${t.recorrencia_id === r.recorrencia_id ? 'selected' : ''}>
+        ${r.descricao} (${formatBRL(r.valor)})
+      </option>
+    `).join('');
+
+    // Badge de origem da sugestão de categoria
     let badgeOrigem = '';
-    if (t.origem_sugestao === 'regra_aprendida') {
+    if (t.origem_sugestao === 'recorrencia') {
+      badgeOrigem = '<span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 font-bold">🔄 Recorrência</span>';
+    } else if (t.origem_sugestao === 'regra_aprendida') {
       badgeOrigem = '<span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.2 rounded bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold">🧠 Regra</span>';
     } else if (t.origem_sugestao === 'historico') {
       badgeOrigem = '<span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.2 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold">🕒 Histórico</span>';
     } else if (t.origem_sugestao === 'semantica') {
       badgeOrigem = '<span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.2 rounded bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 font-bold">✨ IA Sugerido</span>';
+    }
+
+    // Badge de baixa em recorrência
+    let badgeRecorrencia = '';
+    if (t.recorrencia_match) {
+      badgeRecorrencia = '<span class="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-300/60">🔄 Baixa Auto</span>';
     }
 
     return `
@@ -1506,6 +1524,18 @@ function renderImportPreviewTable(previewData) {
           ${valorPrefix}${formatBRL(t.valor)}
         </td>
 
+        <!-- Seletor de Vínculo com Recorrência (Baixa Automática sem Duplicidade) -->
+        <td class="py-2.5 px-3">
+          <div class="flex flex-col gap-1">
+            <select class="import-recorrencia-select text-xs px-2.5 py-1 bg-white dark:bg-slate-800 border ${t.recorrencia_id ? 'border-emerald-400 dark:border-emerald-600 ring-1 ring-emerald-400/40' : 'border-slate-200 dark:border-slate-700'} rounded-lg focus:ring-1 focus:ring-indigo-500 dark:text-white"
+                    data-id="${t.temp_id}" onchange="handleRecorrenciaChange(${t.temp_id}, this.value)">
+              <option value="">(Nenhum / Lançamento Avulso)</option>
+              ${recOptionsHtml}
+            </select>
+            ${badgeRecorrencia}
+          </div>
+        </td>
+
         <!-- Seletor de Categoria Interativo -->
         <td class="py-2.5 px-3">
           <div class="flex items-center gap-1.5">
@@ -1522,7 +1552,7 @@ function renderImportPreviewTable(previewData) {
         <td class="py-2.5 px-3 text-center">
           <label class="inline-flex items-center cursor-pointer" title="Lembrar esta categoria para descrições similares nos próximos extratos">
             <input type="checkbox" class="import-remember-checkbox w-4 h-4 text-indigo-600 rounded cursor-pointer"
-                   data-id="${t.temp_id}" ${t.origem_sugestao !== 'regra_aprendida' ? 'checked' : ''}
+                   data-id="${t.temp_id}" ${t.origem_sugestao !== 'regra_aprendida' && t.origem_sugestao !== 'recorrencia' ? 'checked' : ''}
                    onchange="updateRememberRuleState(${t.temp_id}, this.checked)">
           </label>
         </td>
@@ -1534,6 +1564,35 @@ function renderImportPreviewTable(previewData) {
   updateImportConfirmButtonLabel();
   lucide.createIcons();
 }
+
+function handleRecorrenciaChange(tempId, newRecId) {
+  const trans = state.import.previewTransactions.find(t => t.temp_id === tempId);
+  if (!trans) return;
+
+  const recIdNum = newRecId ? parseInt(newRecId) : null;
+  trans.recorrencia_id = recIdNum;
+
+  // Se o usuário selecionou uma recorrência, atualiza a categoria correspondente se houver
+  if (recIdNum) {
+    const recObj = (state.import.recorrenciasDisponiveis || []).find(r => r.recorrencia_id === recIdNum);
+    if (recObj && recObj.categoria_id) {
+      trans.categoria_id = recObj.categoria_id;
+      const catSelect = document.querySelector(`.import-category-select[data-id="${tempId}"]`);
+      if (catSelect) catSelect.value = recObj.categoria_id;
+    }
+  }
+
+  // Atualiza estilo da borda do select
+  const recSelect = document.querySelector(`.import-recorrencia-select[data-id="${tempId}"]`);
+  if (recSelect) {
+    if (recIdNum) {
+      recSelect.className = 'import-recorrencia-select text-xs px-2.5 py-1 bg-white dark:bg-slate-800 border border-emerald-400 dark:border-emerald-600 ring-1 ring-emerald-400/40 rounded-lg focus:ring-1 focus:ring-indigo-500 dark:text-white';
+    } else {
+      recSelect.className = 'import-recorrencia-select text-xs px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-1 focus:ring-indigo-500 dark:text-white';
+    }
+  }
+}
+window.handleRecorrenciaChange = handleRecorrenciaChange;
 
 function updateImportSelectionState(tempId, isChecked) {
   const trans = state.import.previewTransactions.find(t => t.temp_id === tempId);
@@ -1597,6 +1656,8 @@ async function confirmImportTransactions() {
         tipo: t.tipo,
         categoria_id: t.categoria_id,
         fitid: t.fitid,
+        recorrencia_id: t.recorrencia_id || null,
+        recorrencia_transacao_id: t.recorrencia_transacao_id || null,
         lembrar_regra: isLembrar,
         termo_regra: t.termo_regra_sugerido || t.descricao
       };
@@ -1605,7 +1666,7 @@ async function confirmImportTransactions() {
 
   Swal.fire({
     title: 'Gravando Lançamentos...',
-    text: 'Atualizando seus saldos e memorizando regras aprendidas.',
+    text: 'Atualizando seus saldos, dando baixa em recorrências e memorizando regras.',
     allowOutsideClick: false,
     didOpen: () => {
       Swal.showLoading();
@@ -1641,10 +1702,11 @@ async function confirmImportTransactions() {
     }
   } catch (err) {
     Swal.close();
-    console.error('Erro na confirmação:', err);
-    Swal.fire({ icon: 'error', title: 'Erro de conexão', text: 'Não foi possível gravar os lançamentos.' });
+    console.error('Erro ao confirmar importação:', err);
+    Swal.fire({ icon: 'error', title: 'Erro de conexão', text: 'Não foi possível salvar as transações importadas.' });
   }
 }
+window.confirmImportTransactions = confirmImportTransactions;
 
 // ========================================================
 // RECORRÊNCIAS & DESPESAS FIXAS

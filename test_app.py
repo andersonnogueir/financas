@@ -538,6 +538,107 @@ class TestFinFlowBankImport(unittest.TestCase):
 
         print("OK: Gerente estendeu o período de teste (Trial) por +30 dias com sucesso")
 
+    def test_17_import_reconciliation_with_recurring_expenses(self):
+        # 1. Logar como usuário com permissão PRO (anderson.import@exemplo.com)
+        self.app.post('/api/auth/login', json={
+            "email": "anderson.import@exemplo.com",
+            "senha": "senhaSegura123"
+        })
+        user = database.get_user_by_email("anderson.import@exemplo.com")
+
+        # 2. Criar uma despesa recorrente de Aluguel (R$ 1.850,00)
+        res_rec = self.app.post('/api/recorrencias', json={
+            "descricao": "Aluguel Apartamento",
+            "valor": 1850.00,
+            "tipo": "despesa",
+            "categoria_id": 3,
+            "conta_id": 1,
+            "dia_vencimento": 10,
+            "data_inicio": "2026-08-01",
+            "periodicidade": "mensal"
+        })
+        self.assertEqual(res_rec.status_code, 201)
+        rec_data = json.loads(res_rec.data)
+        rec_id = rec_data['id']
+
+        # 3. Processar geração de recorrências para o mês de Agosto/2026
+        database.generate_recurring_for_month(user['id'], 8, 2026)
+
+        # Verificar se gerou a transação pendente para Agosto
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, status, valor, descricao FROM transacoes WHERE user_id = ? AND recorrencia_id = ? AND strftime('%m', data) = '08' AND status = 'pendente'", (user['id'], rec_id))
+        row_pend = cursor.fetchone()
+        conn.close()
+
+        self.assertIsNotNone(row_pend)
+        transacao_pendente_id = row_pend['id']
+        self.assertEqual(row_pend['valor'], 1850.00)
+
+        # 4. Simular extrato bancário com o pagamento do Aluguel
+        ofx_aluguel = """<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>
+        <STMTTRN>
+            <TRNTYPE>DEBIT</TRNTYPE>
+            <DTPOSTED>20260810120000[-03:EST]</DTPOSTED>
+            <TRNAMT>-1850.00</TRNAMT>
+            <FITID>OFX-ALUGUEL-20260810-999</FITID>
+            <MEMO>PIX PGTO ALUGUEL APARTAMENTO</MEMO>
+        </STMTTRN>
+        </BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>"""
+
+        res_preview = self.app.post('/api/import/preview', data={
+            'conta_id': '1',
+            'arquivo': (io.BytesIO(ofx_aluguel.encode('utf-8')), 'extrato_aluguel.ofx')
+        }, content_type='multipart/form-data')
+
+        self.assertEqual(res_preview.status_code, 200)
+        preview_data = json.loads(res_preview.data)
+        self.assertTrue(preview_data['success'])
+        self.assertEqual(len(preview_data['transacoes']), 1)
+
+        t_importada = preview_data['transacoes'][0]
+        self.assertIsNotNone(t_importada.get('recorrencia_match'))
+        self.assertEqual(t_importada['recorrencia_id'], rec_id)
+        self.assertEqual(t_importada['recorrencia_transacao_id'], transacao_pendente_id)
+        self.assertEqual(t_importada['recorrencia_match']['tipo_baixa'], 'baixa_pendente')
+
+        # 5. Confirmar a importação
+        res_confirm = self.app.post('/api/import/confirm', json={
+            "conta_id": 1,
+            "transacoes": [
+                {
+                    "data": t_importada['data'],
+                    "descricao": t_importada['descricao'],
+                    "valor": t_importada['valor'],
+                    "tipo": t_importada['tipo'],
+                    "categoria_id": t_importada['categoria_id'],
+                    "fitid": t_importada['fitid'],
+                    "recorrencia_id": t_importada['recorrencia_id'],
+                    "recorrencia_transacao_id": t_importada['recorrencia_transacao_id']
+                }
+            ]
+        })
+        self.assertEqual(res_confirm.status_code, 200)
+        confirm_data = json.loads(res_confirm.data)
+        self.assertEqual(confirm_data['salvas'], 1)
+
+        # 6. Verificar se a transação pendente foi atualizada para 'pago' sem duplicar
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, status, fitid, observacoes FROM transacoes WHERE id = ?", (transacao_pendente_id,))
+        trans_atualizada = cursor.fetchone()
+
+        cursor.execute("SELECT COUNT(*) FROM transacoes WHERE user_id = ? AND recorrencia_id = ? AND strftime('%m', data) = '08'", (user['id'], rec_id))
+        total_recorrencias_criadas = cursor.fetchone()[0]
+        conn.close()
+
+        self.assertEqual(trans_atualizada['status'], 'pago')
+        self.assertEqual(trans_atualizada['fitid'], 'OFX-ALUGUEL-20260810-999')
+        self.assertEqual(total_recorrencias_criadas, 1, "Não deve haver duplicação de lançamentos para a recorrência no mês")
+
+        print("OK: Reconciliação inteligente com recorrências e baixa automática sem duplicidade validada com sucesso!")
+
 if __name__ == '__main__':
     unittest.main()
+
 

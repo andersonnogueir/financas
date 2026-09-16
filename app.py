@@ -1182,6 +1182,18 @@ def import_preview():
     conn = database.get_connection()
     cursor = conn.cursor()
 
+    # 1. Carregar recorrências ativas e pendências do mês para reconciliação inteligente
+    datas = [t.get('data') for t in transacoes_raw if t.get('data')]
+    primeira_data = datas[0] if datas else date.today().strftime('%Y-%m-%d')
+    try:
+        dt_ref = datetime.strptime(primeira_data[:10], '%Y-%m-%d')
+        mes_ref, ano_ref = dt_ref.month, dt_ref.year
+    except Exception:
+        hoje = date.today()
+        mes_ref, ano_ref = hoje.month, hoje.year
+
+    candidatos_recorrencias = database.buscar_recorrencias_candidatas(user_id, mes_ref, ano_ref, conn)
+
     transacoes_processadas = []
     total_despesas = 0.0
     total_receitas = 0.0
@@ -1193,6 +1205,13 @@ def import_preview():
         cat_id = sugestao['categoria_id'] if sugestao else None
         cat_nome = sugestao['categoria_nome'] if sugestao else 'Sem Categoria'
         origem = sugestao['origem'] if sugestao else 'padrao'
+
+        # Reconhecimento de correspondência com Despesas / Receitas Recorrentes
+        rec_match = database.identificar_recorrencia_correspondente(t, candidatos_recorrencias)
+        if rec_match and rec_match.get('categoria_id'):
+            cat_id = rec_match['categoria_id']
+            cat_nome = rec_match.get('categoria_nome') or cat_nome
+            origem = 'recorrencia'
 
         # Verificar se já existe transação idêntica no mesmo banco (duplicidade)
         is_duplicada = False
@@ -1228,7 +1247,10 @@ def import_preview():
             "termo_regra_sugerido": termo_sugerido,
             "is_duplicada": is_duplicada,
             "fitid": t.get('fitid', ''),
-            "selecionada": not is_duplicada # Não seleciona por padrão se for duplicada
+            "selecionada": not is_duplicada, # Não seleciona por padrão se for duplicada
+            "recorrencia_match": rec_match,
+            "recorrencia_id": rec_match['recorrencia_id'] if rec_match else None,
+            "recorrencia_transacao_id": rec_match['transacao_id'] if rec_match else None
         })
 
     conn.close()
@@ -1240,13 +1262,14 @@ def import_preview():
         "total_transacoes": len(transacoes_processadas),
         "total_despesas": round(total_despesas, 2),
         "total_receitas": round(total_receitas, 2),
-        "transacoes": transacoes_processadas
+        "transacoes": transacoes_processadas,
+        "recorrencias_disponiveis": candidatos_recorrencias.get('recorrencias', [])
     })
 
 @app.route("/api/import/confirm", methods=["POST"])
 @login_required
 def import_confirm():
-    """Grava as transações confirmadas pelo usuário e memoriza novas regras de categorização."""
+    """Grava as transações confirmadas pelo usuário, dando baixa em recorrências e memorizando novas regras."""
     user_id = session['user_id']
     plan_ctx = get_user_plan_context(user_id)
     if not plan_ctx['permissoes']['can_import_ofx']:
@@ -1270,6 +1293,7 @@ def import_confirm():
 
     salvas = 0
     regras_aprendidas = 0
+    baixas_recorrencias = 0
 
     for t in transacoes:
         valor = float(t.get('valor', 0))
@@ -1283,13 +1307,73 @@ def import_confirm():
         fitid = t.get('fitid') or None
         observacoes = "Importado via Extrato Bancário"
 
-        cursor.execute("""
-            INSERT INTO transacoes 
-            (user_id, tipo, descricao, valor, data, conta_id, categoria_id, status, observacoes, fitid)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'pago', ?, ?)
-        """, (user_id, tipo, descricao, valor, data_trans, conta_id, categoria_id, observacoes, fitid))
+        rec_trans_id = t.get('recorrencia_transacao_id')
+        rec_id = t.get('recorrencia_id')
 
-        salvas += 1
+        # 1. Se estiver vinculada a uma transação pendente de recorrência no mês, dá baixa nela
+        if rec_trans_id:
+            cursor.execute("SELECT id FROM transacoes WHERE id = ? AND user_id = ?", (rec_trans_id, user_id))
+            row_rec = cursor.fetchone()
+            if row_rec:
+                cursor.execute("""
+                    UPDATE transacoes 
+                    SET status = 'pago',
+                        valor = ?,
+                        data = ?,
+                        conta_id = COALESCE(?, conta_id),
+                        categoria_id = COALESCE(?, categoria_id),
+                        fitid = ?,
+                        observacoes = 'Liquidado via Extrato Bancário'
+                    WHERE id = ? AND user_id = ?
+                """, (valor, data_trans, conta_id, categoria_id, fitid, rec_trans_id, user_id))
+                salvas += 1
+                baixas_recorrencias += 1
+            else:
+                cursor.execute("""
+                    INSERT INTO transacoes 
+                    (user_id, tipo, descricao, valor, data, conta_id, categoria_id, status, observacoes, fitid, recorrencia_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'pago', ?, ?, ?)
+                """, (user_id, tipo, descricao, valor, data_trans, conta_id, categoria_id, observacoes, fitid, rec_id))
+                salvas += 1
+        elif rec_id:
+            # 2. Se estiver vinculada à definição de recorrência (sem ID pendente específico)
+            mes_str = data_trans[5:7]
+            ano_str = data_trans[:4]
+            cursor.execute("""
+                SELECT id FROM transacoes 
+                WHERE user_id = ? AND recorrencia_id = ? AND strftime('%m', data) = ? AND strftime('%Y', data) = ? AND status = 'pendente'
+            """, (user_id, rec_id, mes_str, ano_str))
+            row_pend = cursor.fetchone()
+            if row_pend:
+                pend_id = row_pend['id'] if isinstance(row_pend, dict) or hasattr(row_pend, 'keys') else row_pend[0]
+                cursor.execute("""
+                    UPDATE transacoes 
+                    SET status = 'pago',
+                        valor = ?,
+                        data = ?,
+                        conta_id = COALESCE(?, conta_id),
+                        categoria_id = COALESCE(?, categoria_id),
+                        fitid = ?,
+                        observacoes = 'Liquidado via Extrato Bancário'
+                    WHERE id = ? AND user_id = ?
+                """, (valor, data_trans, conta_id, categoria_id, fitid, pend_id, user_id))
+                salvas += 1
+                baixas_recorrencias += 1
+            else:
+                cursor.execute("""
+                    INSERT INTO transacoes 
+                    (user_id, tipo, descricao, valor, data, conta_id, categoria_id, status, observacoes, fitid, recorrencia_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'pago', ?, ?, ?)
+                """, (user_id, tipo, descricao, valor, data_trans, conta_id, categoria_id, observacoes, fitid, rec_id))
+                salvas += 1
+        else:
+            # 3. Lançamento avulso normal
+            cursor.execute("""
+                INSERT INTO transacoes 
+                (user_id, tipo, descricao, valor, data, conta_id, categoria_id, status, observacoes, fitid)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'pago', ?, ?)
+            """, (user_id, tipo, descricao, valor, data_trans, conta_id, categoria_id, observacoes, fitid))
+            salvas += 1
 
         # Se o usuário optou por memorizar a regra para próximas importações
         if t.get('lembrar_regra') and categoria_id:
@@ -1300,11 +1384,16 @@ def import_confirm():
     conn.commit()
     conn.close()
 
+    msg = f"{salvas} transações processadas com sucesso!"
+    if baixas_recorrencias > 0:
+        msg += f" ({baixas_recorrencias} baixas automáticas em recorrências realizadas sem duplicidade)."
+
     return jsonify({
         "success": True,
         "salvas": salvas,
+        "baixas_recorrencias": baixas_recorrencias,
         "regras_aprendidas": regras_aprendidas,
-        "message": f"{salvas} transações importadas com sucesso! ({regras_aprendidas} novas regras de categorização memorizadas)."
+        "message": msg
     })
 
 @app.route("/api/regras-categorizacao", methods=["GET"])

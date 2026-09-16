@@ -1346,6 +1346,156 @@ def zerar_lancamentos_mes(user_id, mes, ano):
 
     return deletadas
 
+def buscar_recorrencias_candidatas(user_id, mes=None, ano=None, conn=None):
+    """Busca todas as recorrências ativas do usuário e suas transações pendentes no mês."""
+    should_close = False
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+
+    cursor = conn.cursor()
+    
+    # 1. Recorrências ativas cadastradas
+    cursor.execute("""
+        SELECT r.id as recorrencia_id, r.tipo, r.descricao, r.valor, r.dia_vencimento,
+               r.conta_id, r.categoria_id, c.nome as categoria_nome, cb.nome as conta_nome
+        FROM recorrencias r
+        LEFT JOIN categorias c ON r.categoria_id = c.id
+        LEFT JOIN contas cb ON r.conta_id = cb.id
+        WHERE r.user_id = ? AND r.ativo = 1
+        ORDER BY r.descricao ASC
+    """, (user_id,))
+    recs = [dict(row) for row in cursor.fetchall()]
+
+    # 2. Transações pendentes no mês que possuem vínculo com recorrência
+    pendentes_query = """
+        SELECT t.id as transacao_id, t.recorrencia_id, t.tipo, t.descricao, t.valor, t.data,
+               t.conta_id, t.categoria_id, c.nome as categoria_nome, cb.nome as conta_nome
+        FROM transacoes t
+        LEFT JOIN categorias c ON t.categoria_id = c.id
+        LEFT JOIN contas cb ON t.conta_id = cb.id
+        WHERE t.user_id = ? AND t.status = 'pendente' AND t.recorrencia_id IS NOT NULL
+    """
+    params = [user_id]
+    if mes and ano:
+        pendentes_query += " AND strftime('%m', t.data) = ? AND strftime('%Y', t.data) = ?"
+        params.extend([f"{int(mes):02d}", str(ano)])
+
+    cursor.execute(pendentes_query, params)
+    trans_pendentes = [dict(row) for row in cursor.fetchall()]
+
+    if should_close:
+        conn.close()
+
+    return {
+        "recorrencias": recs,
+        "transacoes_pendentes": trans_pendentes
+    }
+
+def identificar_recorrencia_correspondente(transacao, candidatos_data):
+    """
+    Analisa se uma transação de extrato corresponde a uma recorrência/lançamento pendente.
+    Retorna o melhor candidato ou None.
+    """
+    t_tipo = transacao.get('tipo', 'despesa')
+    t_valor = float(transacao.get('valor', 0))
+    t_desc = transacao.get('descricao', '').lower().strip()
+    t_data = transacao.get('data', '') # YYYY-MM-DD
+    
+    if t_valor <= 0 or not t_desc:
+        return None
+
+    # Extrai palavras-chave significativas da descrição do extrato
+    palavras_extrato = set(re.findall(r'[a-zA-Z\u00C0-\u00FF]{3,}', t_desc))
+    stopwords = {'para', 'pago', 'compra', 'cartao', 'debito', 'credito', 'transferencia', 'banco', 'transf', 'auto', 'pagamento', 'liquidacao', 'pix'}
+    palavras_uteis = {p for p in palavras_extrato if p not in stopwords}
+
+    melhor_match = None
+    maior_score = 0
+
+    # 1. Primeiro verifica nas transações pendentes geradas para o mês
+    for pend in candidatos_data.get('transacoes_pendentes', []):
+        if pend['tipo'] != t_tipo:
+            continue
+        
+        score = 0
+        p_valor = float(pend['valor'])
+        diff_valor = abs(t_valor - p_valor)
+        
+        # Valor exato ou muito próximo
+        if diff_valor < 0.01:
+            score += 50
+        elif p_valor > 0 and (diff_valor / p_valor) <= 0.08:
+            score += 30
+        
+        p_desc = pend['descricao'].lower()
+        palavras_pend = set(re.findall(r'[a-zA-Z\u00C0-\u00FF]{3,}', p_desc)) - stopwords
+        
+        # Similaridade de texto / palavras em comum
+        intersecao = palavras_uteis.intersection(palavras_pend)
+        if intersecao:
+            score += len(intersecao) * 25
+        elif p_desc in t_desc or any(p in t_desc for p in palavras_pend):
+            score += 30
+
+        # Se houver proximidade na data de vencimento (mesmo mês)
+        if t_data and pend.get('data') and t_data[:7] == str(pend['data'])[:7]:
+            score += 15
+
+        if score >= 50 and score > maior_score:
+            maior_score = score
+            melhor_match = {
+                "transacao_id": pend['transacao_id'],
+                "recorrencia_id": pend['recorrencia_id'],
+                "descricao": pend['descricao'],
+                "valor": p_valor,
+                "categoria_id": pend.get('categoria_id'),
+                "categoria_nome": pend.get('categoria_nome') or 'Sem Categoria',
+                "origem": "transacao_pendente",
+                "tipo_baixa": "baixa_pendente",
+                "score": score
+            }
+
+    # 2. Se não encontrou transação pendente específica, avalia as definições de recorrência ativas
+    if not melhor_match:
+        for rec in candidatos_data.get('recorrencias', []):
+            if rec['tipo'] != t_tipo:
+                continue
+
+            score = 0
+            r_valor = float(rec['valor'])
+            diff_valor = abs(t_valor - r_valor)
+
+            if diff_valor < 0.01:
+                score += 45
+            elif r_valor > 0 and (diff_valor / r_valor) <= 0.08:
+                score += 25
+
+            r_desc = rec['descricao'].lower()
+            palavras_rec = set(re.findall(r'[a-zA-Z\u00C0-\u00FF]{3,}', r_desc)) - stopwords
+
+            intersecao = palavras_uteis.intersection(palavras_rec)
+            if intersecao:
+                score += len(intersecao) * 25
+            elif r_desc in t_desc or any(p in t_desc for p in palavras_rec):
+                score += 30
+
+            if score >= 50 and score > maior_score:
+                maior_score = score
+                melhor_match = {
+                    "transacao_id": None,
+                    "recorrencia_id": rec['recorrencia_id'],
+                    "descricao": rec['descricao'],
+                    "valor": r_valor,
+                    "categoria_id": rec.get('categoria_id'),
+                    "categoria_nome": rec.get('categoria_nome') or 'Sem Categoria',
+                    "origem": "recorrencia_ativa",
+                    "tipo_baixa": "vinculo_recorrencia",
+                    "score": score
+                }
+
+    return melhor_match
+
 # ==========================================
 # OPEN FINANCE & INTEGRAÇÃO BANCÁRIA
 # ==========================================
