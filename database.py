@@ -1496,6 +1496,89 @@ def identificar_recorrencia_correspondente(transacao, candidatos_data):
 
     return melhor_match
 
+def detectar_transferencia_sugerida(descricao, tipo, contas_usuario, conta_importada_id=None, descricao_original=None):
+    """
+    Analisa se uma descrição bancária indica transferência entre contas do próprio usuário.
+    Retorna dict com 'is_transferencia': True/False, 'conta_contrapartida_id', 'motivo', ou None.
+    """
+    texto_completo = f"{descricao or ''} {descricao_original or ''}"
+    if not texto_completo.strip():
+        return None
+
+    import unicodedata
+    def _norm(txt):
+        return ''.join(c for c in unicodedata.normalize('NFD', (txt or '').lower()) if unicodedata.category(c) != 'Mn').strip()
+
+    desc_norm = _norm(texto_completo)
+    
+    # Termos indicativos de transferência interna
+    termos_transf = [
+        'transf', 'transferencia', 'ted', 'doc', 'tef',
+        'mesma titularidade', 'entre contas', 'aplicacao',
+        'resgate', 'investimento', 'resgate autom', 'aplic autom', 'cofrinho',
+        'nuconta', 'interpag', 'pix transf'
+    ]
+
+    tem_termo_transf = any(t in desc_norm for t in termos_transf)
+    
+    # Verificar se o nome ou palavras-chave das outras contas do usuário aparecem na descrição
+    conta_encontrada = None
+    for c in contas_usuario:
+        if conta_importada_id:
+            try:
+                if int(c['id']) == int(conta_importada_id):
+                    continue
+            except (ValueError, TypeError):
+                pass
+        
+        c_nome_norm = _norm(c.get('nome', ''))
+        c_tipo_norm = _norm(c.get('tipo', ''))
+        
+        # 1. Match nome completo normalizado
+        if len(c_nome_norm) >= 3 and c_nome_norm in desc_norm:
+            conta_encontrada = c
+            break
+        
+        # 2. Match por tokens significativos do nome da conta (ex: 'itau', 'nubank', 'inter', 'bradesco', 'santander', 'c6')
+        palavras_conta = [p for p in re.findall(r'[a-zA-Z]{3,}', c_nome_norm) if p not in ['banco', 'conta', 'carteira', 'corrente', 'poupanca', 'principal']]
+        if any(p in desc_norm for p in palavras_conta):
+            conta_encontrada = c
+            break
+
+        # 3. Match por tipo especial
+        if c_tipo_norm in ['carteira', 'poupanca', 'investimento'] and c_tipo_norm in desc_norm:
+            conta_encontrada = c
+            break
+
+    if conta_encontrada:
+        return {
+            "is_transferencia": True,
+            "conta_contrapartida_id": conta_encontrada['id'],
+            "conta_contrapartida_nome": conta_encontrada['nome'],
+            "motivo": f"Identificado nome da conta '{conta_encontrada['nome']}'"
+        }
+    elif tem_termo_transf:
+        outras_contas = []
+        for c in contas_usuario:
+            if conta_importada_id:
+                try:
+                    if int(c['id']) == int(conta_importada_id):
+                        continue
+                except (ValueError, TypeError):
+                    pass
+            outras_contas.append(c)
+        sugerida = outras_contas[0] if outras_contas else None
+        return {
+            "is_transferencia": True,
+            "conta_contrapartida_id": sugerida['id'] if sugerida else None,
+            "conta_contrapartida_nome": sugerida['nome'] if sugerida else '',
+            "motivo": "Identificado termo de transferência bancária"
+        }
+
+    return None
+
+get_contas_by_user = calculate_account_balances
+
 # ==========================================
 # OPEN FINANCE & INTEGRAÇÃO BANCÁRIA
 # ==========================================

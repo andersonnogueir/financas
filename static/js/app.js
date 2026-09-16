@@ -1452,32 +1452,82 @@ function renderImportPreviewTable(previewData) {
   const statsEl = document.getElementById('import-preview-stats');
   const recEl = document.getElementById('import-preview-rec');
   const despEl = document.getElementById('import-preview-desp');
+  const dupEl = document.getElementById('import-preview-dup');
   const btnConfirmLbl = document.getElementById('lbl-btn-confirm-import');
 
   state.import.recorrenciasDisponiveis = previewData.recorrencias_disponiveis || [];
+  state.import.contasDisponiveis = previewData.contas_disponiveis || state.contas || [];
 
-  if (statsEl) statsEl.textContent = `${previewData.total_transacoes} lançamentos encontrados`;
+  const totalTrans = previewData.total_transacoes || previewData.transacoes.length;
+  const totalDup = previewData.total_duplicadas !== undefined ? previewData.total_duplicadas : previewData.transacoes.filter(t => t.is_duplicada).length;
+
+  if (statsEl) statsEl.textContent = `${totalTrans} lançamentos encontrados`;
   if (recEl) recEl.textContent = `+${formatBRL(previewData.total_receitas)}`;
   if (despEl) despEl.textContent = `-${formatBRL(previewData.total_despesas)}`;
+
+  if (dupEl) {
+    if (totalDup > 0) {
+      dupEl.textContent = `⚠️ ${totalDup} ${totalDup === 1 ? 'duplicata desmarcada' : 'duplicatas desmarcadas'}`;
+      dupEl.classList.remove('hidden');
+    } else {
+      dupEl.classList.add('hidden');
+    }
+  }
 
   if (!tbody) return;
 
   tbody.innerHTML = previewData.transacoes.map((t, idx) => {
+    const isTransf = t.tipo === 'transferencia';
     const isReceita = t.tipo === 'receita';
-    const valorColor = isReceita ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
-    const valorPrefix = isReceita ? '+' : '-';
+    const isDespesa = t.tipo === 'despesa';
 
-    // Opções de categorias filtradas por tipo
-    const catsForType = state.categorias.filter(c => c.tipo === t.tipo);
+    let valorColor = 'text-slate-900 dark:text-white';
+    let valorPrefix = '';
+    if (isTransf) {
+      valorColor = 'text-indigo-600 dark:text-indigo-400';
+      valorPrefix = '↔ ';
+    } else if (isReceita) {
+      valorColor = 'text-emerald-600 dark:text-emerald-400';
+      valorPrefix = '+';
+    } else {
+      valorColor = 'text-rose-600 dark:text-rose-400';
+      valorPrefix = '-';
+    }
+
+    // Tipo options (Despesa / Receita / Transferência)
+    const tipoOptionsHtml = `
+      <select class="import-tipo-select text-xs font-semibold px-2 py-1 bg-white dark:bg-slate-800 border ${isTransf ? 'border-indigo-400 dark:border-indigo-600 ring-1 ring-indigo-400/30' : 'border-slate-200 dark:border-slate-700'} rounded-lg focus:ring-1 focus:ring-indigo-500 dark:text-white"
+              data-id="${t.temp_id}" onchange="handleImportTipoChange(${t.temp_id}, this.value)">
+        <option value="${t.tipo_original === 'receita' ? 'receita' : 'despesa'}" ${!isTransf ? 'selected' : ''}>
+          ${t.tipo_original === 'receita' ? '🟢 Receita' : '🔴 Despesa'}
+        </option>
+        <option value="transferencia" ${isTransf ? 'selected' : ''}>
+          ↔️ Transferência
+        </option>
+      </select>
+    `;
+
+    // Opções de categorias filtradas por tipo original
+    const effectiveTipo = isTransf ? t.tipo_original : t.tipo;
+    const catsForType = state.categorias.filter(c => c.tipo === effectiveTipo);
     const catOptionsHtml = catsForType.map(c => `
       <option value="${c.id}" ${c.id === t.categoria_id ? 'selected' : ''}>${c.nome}</option>
     `).join('');
 
-    // Opções de recorrências filtradas por tipo
-    const recsForType = (state.import.recorrenciasDisponiveis || []).filter(r => r.tipo === t.tipo);
+    // Opções de recorrências filtradas por tipo original
+    const recsForType = (state.import.recorrenciasDisponiveis || []).filter(r => r.tipo === effectiveTipo);
     const recOptionsHtml = recsForType.map(r => `
       <option value="${r.recorrencia_id}" ${t.recorrencia_id === r.recorrencia_id ? 'selected' : ''}>
         ${r.descricao} (${formatBRL(r.valor)})
+      </option>
+    `).join('');
+
+    // Opções de outras contas para transferência
+    const currentContaId = parseInt(state.import.contaId || 0);
+    const otherContas = (state.import.contasDisponiveis || state.contas || []).filter(c => c.id !== currentContaId);
+    const contasContrapartidaHtml = otherContas.map(c => `
+      <option value="${c.id}" ${c.id === t.conta_destino_id ? 'selected' : ''}>
+        ${c.nome} (${c.tipo})
       </option>
     `).join('');
 
@@ -1495,12 +1545,70 @@ function renderImportPreviewTable(previewData) {
 
     // Badge de baixa em recorrência
     let badgeRecorrencia = '';
-    if (t.recorrencia_match) {
+    if (t.recorrencia_match && !isTransf) {
       badgeRecorrencia = '<span class="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-300/60">🔄 Baixa Auto</span>';
     }
 
+    // Coluna Recorrência
+    let colRecorrenciaHtml = '';
+    if (isTransf) {
+      colRecorrenciaHtml = '<span class="text-[11px] text-slate-400 italic">Não aplicável</span>';
+    } else {
+      colRecorrenciaHtml = `
+        <div class="flex flex-col gap-1">
+          <select class="import-recorrencia-select text-xs px-2.5 py-1 bg-white dark:bg-slate-800 border ${t.recorrencia_id ? 'border-emerald-400 dark:border-emerald-600 ring-1 ring-emerald-400/40' : 'border-slate-200 dark:border-slate-700'} rounded-lg focus:ring-1 focus:ring-indigo-500 dark:text-white"
+                  data-id="${t.temp_id}" onchange="handleRecorrenciaChange(${t.temp_id}, this.value)">
+            <option value="">(Nenhum / Lançamento Avulso)</option>
+            ${recOptionsHtml}
+          </select>
+          ${badgeRecorrencia}
+        </div>
+      `;
+    }
+
+    // Coluna Classificação / Conta Contrapartida
+    let colClassificacaoHtml = '';
+    if (isTransf) {
+      const direcaoLabel = t.direcao_original === 'saida' ? '➡️ Conta Destino (Para):' : '⬅️ Conta Origem (De):';
+      colClassificacaoHtml = `
+        <div class="flex flex-col gap-1">
+          <span class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">${direcaoLabel}</span>
+          <select class="import-contrapartida-select text-xs px-2.5 py-1 bg-white dark:bg-slate-800 border border-indigo-400 dark:border-indigo-600 ring-1 ring-indigo-400/40 rounded-lg focus:ring-1 focus:ring-indigo-500 dark:text-white"
+                  data-id="${t.temp_id}" onchange="handleContaContrapartidaChange(${t.temp_id}, this.value)">
+            <option value="">Selecione a outra conta...</option>
+            ${contasContrapartidaHtml}
+          </select>
+        </div>
+      `;
+    } else {
+      colClassificacaoHtml = `
+        <div class="flex items-center gap-1.5">
+          <select class="import-category-select text-xs px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-1 focus:ring-indigo-500 dark:text-white"
+                  data-id="${t.temp_id}" onchange="handleCategoryChange(${t.temp_id}, this.value)">
+            <option value="">Sem categoria</option>
+            ${catOptionsHtml}
+          </select>
+          ${badgeOrigem}
+        </div>
+      `;
+    }
+
+    // Coluna Lembrar
+    let colLembrarHtml = '';
+    if (isTransf) {
+      colLembrarHtml = '<span class="text-slate-300 dark:text-slate-600">-</span>';
+    } else {
+      colLembrarHtml = `
+        <label class="inline-flex items-center cursor-pointer" title="Lembrar esta categoria para descrições similares nos próximos extratos">
+          <input type="checkbox" class="import-remember-checkbox w-4 h-4 text-indigo-600 rounded cursor-pointer"
+                 data-id="${t.temp_id}" ${t.origem_sugestao !== 'regra_aprendida' && t.origem_sugestao !== 'recorrencia' ? 'checked' : ''}
+                 onchange="updateRememberRuleState(${t.temp_id}, this.checked)">
+        </label>
+      `;
+    }
+
     return `
-      <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition ${t.is_duplicada ? 'bg-amber-50/40 dark:bg-amber-950/20' : ''}" data-row-id="${t.temp_id}">
+      <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition ${t.is_duplicada ? 'bg-amber-50/50 dark:bg-amber-950/30' : ''}" data-row-id="${t.temp_id}">
         
         <!-- Checkbox de Seleção -->
         <td class="py-2.5 px-3 text-center">
@@ -1516,7 +1624,7 @@ function renderImportPreviewTable(previewData) {
         <!-- Descrição -->
         <td class="py-2.5 px-3">
           <div class="font-semibold text-slate-900 dark:text-white text-xs">${t.descricao}</div>
-          ${t.is_duplicada ? '<span class="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 font-semibold">⚠️ Possível duplicata</span>' : ''}
+          ${t.is_duplicada ? '<div class="mt-1"><span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 font-bold border border-amber-300/60"><i data-lucide="alert-triangle" class="w-3 h-3"></i> Já importado (desmarcado)</span></div>' : ''}
         </td>
 
         <!-- Valor -->
@@ -1524,37 +1632,24 @@ function renderImportPreviewTable(previewData) {
           ${valorPrefix}${formatBRL(t.valor)}
         </td>
 
-        <!-- Seletor de Vínculo com Recorrência (Baixa Automática sem Duplicidade) -->
+        <!-- Seletor de Tipo / Operação -->
         <td class="py-2.5 px-3">
-          <div class="flex flex-col gap-1">
-            <select class="import-recorrencia-select text-xs px-2.5 py-1 bg-white dark:bg-slate-800 border ${t.recorrencia_id ? 'border-emerald-400 dark:border-emerald-600 ring-1 ring-emerald-400/40' : 'border-slate-200 dark:border-slate-700'} rounded-lg focus:ring-1 focus:ring-indigo-500 dark:text-white"
-                    data-id="${t.temp_id}" onchange="handleRecorrenciaChange(${t.temp_id}, this.value)">
-              <option value="">(Nenhum / Lançamento Avulso)</option>
-              ${recOptionsHtml}
-            </select>
-            ${badgeRecorrencia}
-          </div>
+          ${tipoOptionsHtml}
         </td>
 
-        <!-- Seletor de Categoria Interativo -->
+        <!-- Seletor de Vínculo com Recorrência -->
         <td class="py-2.5 px-3">
-          <div class="flex items-center gap-1.5">
-            <select class="import-category-select text-xs px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-1 focus:ring-indigo-500 dark:text-white"
-                    data-id="${t.temp_id}" onchange="handleCategoryChange(${t.temp_id}, this.value)">
-              <option value="">Sem categoria</option>
-              ${catOptionsHtml}
-            </select>
-            ${badgeOrigem}
-          </div>
+          ${colRecorrenciaHtml}
+        </td>
+
+        <!-- Seletor de Categoria ou Conta Contrapartida -->
+        <td class="py-2.5 px-3">
+          ${colClassificacaoHtml}
         </td>
 
         <!-- Checkbox Lembrar Regra -->
         <td class="py-2.5 px-3 text-center">
-          <label class="inline-flex items-center cursor-pointer" title="Lembrar esta categoria para descrições similares nos próximos extratos">
-            <input type="checkbox" class="import-remember-checkbox w-4 h-4 text-indigo-600 rounded cursor-pointer"
-                   data-id="${t.temp_id}" ${t.origem_sugestao !== 'regra_aprendida' && t.origem_sugestao !== 'recorrencia' ? 'checked' : ''}
-                   onchange="updateRememberRuleState(${t.temp_id}, this.checked)">
-          </label>
+          ${colLembrarHtml}
         </td>
 
       </tr>
@@ -1564,6 +1659,49 @@ function renderImportPreviewTable(previewData) {
   updateImportConfirmButtonLabel();
   lucide.createIcons();
 }
+
+function handleImportTipoChange(tempId, novoTipo) {
+  const trans = state.import.previewTransactions.find(t => t.temp_id === tempId);
+  if (!trans) return;
+
+  trans.tipo = novoTipo;
+
+  if (novoTipo === 'transferencia') {
+    trans.recorrencia_id = null;
+    trans.recorrencia_transacao_id = null;
+    if (!trans.conta_destino_id) {
+      const currentContaId = parseInt(state.import.contaId || 0);
+      const otherContas = (state.import.contasDisponiveis || state.contas || []).filter(c => c.id !== currentContaId);
+      if (otherContas.length > 0) {
+        trans.conta_destino_id = otherContas[0].id;
+        trans.conta_contrapartida_id = otherContas[0].id;
+      }
+    }
+  } else {
+    trans.tipo = trans.tipo_original || novoTipo;
+  }
+
+  // Re-renderiza a tabela preservando os dados
+  renderImportPreviewTable({
+    total_transacoes: state.import.previewTransactions.length,
+    total_receitas: state.import.previewTransactions.filter(t => t.tipo === 'receita').reduce((sum, t) => sum + t.valor, 0),
+    total_despesas: state.import.previewTransactions.filter(t => t.tipo === 'despesa').reduce((sum, t) => sum + t.valor, 0),
+    transacoes: state.import.previewTransactions,
+    recorrencias_disponiveis: state.import.recorrenciasDisponiveis,
+    contas_disponiveis: state.import.contasDisponiveis
+  });
+}
+window.handleImportTipoChange = handleImportTipoChange;
+
+function handleContaContrapartidaChange(tempId, newContaId) {
+  const trans = state.import.previewTransactions.find(t => t.temp_id === tempId);
+  if (!trans) return;
+
+  const cid = newContaId ? parseInt(newContaId) : null;
+  trans.conta_destino_id = cid;
+  trans.conta_contrapartida_id = cid;
+}
+window.handleContaContrapartidaChange = handleContaContrapartidaChange;
 
 function handleRecorrenciaChange(tempId, newRecId) {
   const trans = state.import.previewTransactions.find(t => t.temp_id === tempId);
@@ -1642,6 +1780,17 @@ async function confirmImportTransactions() {
     return;
   }
 
+  // Verificar se alguma transferência selecionada não possui conta contrapartida definida
+  const transfSemConta = selectedTrans.find(t => t.tipo === 'transferencia' && !t.conta_destino_id && !t.conta_contrapartida_id);
+  if (transfSemConta) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Conta de Contrapartida Obrigatória',
+      text: `Por favor, selecione a outra conta bancária para a transferência '${transfSemConta.descricao}'.`
+    });
+    return;
+  }
+
   // Prepara payload
   const payload = {
     conta_id: state.import.contaId,
@@ -1654,11 +1803,13 @@ async function confirmImportTransactions() {
         descricao: t.descricao,
         valor: t.valor,
         tipo: t.tipo,
-        categoria_id: t.categoria_id,
+        direcao_original: t.direcao_original || (t.tipo_original === 'despesa' ? 'saida' : 'entrada'),
+        conta_destino_id: t.tipo === 'transferencia' ? (t.conta_destino_id || t.conta_contrapartida_id || null) : null,
+        categoria_id: t.tipo === 'transferencia' ? null : t.categoria_id,
         fitid: t.fitid,
-        recorrencia_id: t.recorrencia_id || null,
-        recorrencia_transacao_id: t.recorrencia_transacao_id || null,
-        lembrar_regra: isLembrar,
+        recorrencia_id: t.tipo === 'transferencia' ? null : (t.recorrencia_id || null),
+        recorrencia_transacao_id: t.tipo === 'transferencia' ? null : (t.recorrencia_transacao_id || null),
+        lembrar_regra: t.tipo === 'transferencia' ? false : isLembrar,
         termo_regra: t.termo_regra_sugerido || t.descricao
       };
     })
@@ -1666,7 +1817,7 @@ async function confirmImportTransactions() {
 
   Swal.fire({
     title: 'Gravando Lançamentos...',
-    text: 'Atualizando seus saldos, dando baixa em recorrências e memorizando regras.',
+    text: 'Atualizando seus saldos, efetuando transferências e memorizando regras.',
     allowOutsideClick: false,
     didOpen: () => {
       Swal.showLoading();
@@ -1683,23 +1834,23 @@ async function confirmImportTransactions() {
     const data = await res.json();
     Swal.close();
 
-    if (data.success) {
-      closeModal('modal-import');
-      resetImportModal();
-      await loadAllData();
-
-      Swal.fire({
-        icon: 'success',
-        title: 'Importação Concluída com Sucesso!',
-        html: `
-          <p class="text-sm text-slate-600 dark:text-slate-300">${data.message}</p>
-        `,
-        confirmButtonColor: '#4f46e5'
-      });
-    } else {
+    if (!res.ok || !data.success) {
       if (handleApiUpgradeOrError(res, data)) return;
-      Swal.fire({ icon: 'error', title: 'Erro ao gravar transações', text: data.error });
+      Swal.fire({ icon: 'error', title: 'Erro ao salvar', text: data.error || 'Não foi possível gravar os lançamentos.' });
+      return;
     }
+
+    closeModal('modal-import');
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Importação Concluída!',
+      text: data.message || `${data.salvas} transações foram importadas e seus saldos foram atualizados.`,
+      confirmButtonColor: '#4f46e5'
+    });
+
+    // Recarregar dados e dashboard
+    await loadAllData();
   } catch (err) {
     Swal.close();
     console.error('Erro ao confirmar importação:', err);

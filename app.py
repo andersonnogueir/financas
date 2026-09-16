@@ -1193,6 +1193,7 @@ def import_preview():
         mes_ref, ano_ref = hoje.month, hoje.year
 
     candidatos_recorrencias = database.buscar_recorrencias_candidatas(user_id, mes_ref, ano_ref, conn)
+    contas_usuario = database.get_contas_by_user(user_id, conn)
 
     transacoes_processadas = []
     total_despesas = 0.0
@@ -1213,16 +1214,32 @@ def import_preview():
             cat_nome = rec_match.get('categoria_nome') or cat_nome
             origem = 'recorrencia'
 
+        # Reconhecimento de transferência entre contas do usuário
+        transf_sugestao = database.detectar_transferencia_sugerida(t['descricao'], t['tipo'], contas_usuario, conta_id, t.get('descricao_original'))
+        is_transferencia = bool(transf_sugestao)
+        conta_contrapartida_id = transf_sugestao['conta_contrapartida_id'] if transf_sugestao else None
+        direcao_original = 'saida' if t['tipo'] == 'despesa' else 'entrada'
+
+        if is_transferencia and not rec_match:
+            tipo_final = 'transferencia'
+        else:
+            tipo_final = t['tipo']
+
         # Verificar se já existe transação idêntica no mesmo banco (duplicidade)
         is_duplicada = False
         if t.get('fitid'):
             cursor.execute("SELECT COUNT(*) FROM transacoes WHERE user_id = ? AND fitid = ?", (user_id, t['fitid']))
             is_duplicada = cursor.fetchone()[0] > 0
-        else:
+        
+        if not is_duplicada and conta_id:
             cursor.execute("""
                 SELECT COUNT(*) FROM transacoes 
-                WHERE user_id = ? AND data = ? AND valor = ? AND tipo = ? AND lower(descricao) = lower(?)
-            """, (user_id, t['data'], t['valor'], t['tipo'], t['descricao'].strip()))
+                WHERE user_id = ? 
+                  AND (conta_id = ? OR conta_destino_id = ?)
+                  AND data = ? 
+                  AND abs(valor - ?) < 0.01 
+                  AND lower(descricao) = lower(?)
+            """, (user_id, conta_id, conta_id, t['data'], t['valor'], t['descricao'].strip()))
             is_duplicada = cursor.fetchone()[0] > 0
 
         if t['tipo'] == 'despesa':
@@ -1240,7 +1257,12 @@ def import_preview():
             "descricao": t['descricao'],
             "descricao_original": t.get('descricao_original', t['descricao']),
             "valor": t['valor'],
-            "tipo": t['tipo'],
+            "tipo": tipo_final,
+            "tipo_original": t['tipo'],
+            "direcao_original": direcao_original,
+            "is_transferencia": is_transferencia,
+            "conta_contrapartida_id": conta_contrapartida_id,
+            "conta_destino_id": conta_contrapartida_id if is_transferencia else None,
             "categoria_id": cat_id,
             "categoria_nome": cat_nome,
             "origem_sugestao": origem,
@@ -1255,21 +1277,25 @@ def import_preview():
 
     conn.close()
 
+    total_duplicadas = sum(1 for t in transacoes_processadas if t['is_duplicada'])
+
     return jsonify({
         "success": True,
         "filename": file.filename,
         "conta_id": conta_id,
         "total_transacoes": len(transacoes_processadas),
+        "total_duplicadas": total_duplicadas,
         "total_despesas": round(total_despesas, 2),
         "total_receitas": round(total_receitas, 2),
         "transacoes": transacoes_processadas,
-        "recorrencias_disponiveis": candidatos_recorrencias.get('recorrencias', [])
+        "recorrencias_disponiveis": candidatos_recorrencias.get('recorrencias', []),
+        "contas_disponiveis": [{"id": c['id'], "nome": c['nome'], "tipo": c['tipo'], "instituicao": c.get('instituicao', ''), "cor": c.get('cor', '#6366f1')} for c in contas_usuario]
     })
 
 @app.route("/api/import/confirm", methods=["POST"])
 @login_required
 def import_confirm():
-    """Grava as transações confirmadas pelo usuário, dando baixa em recorrências e memorizando novas regras."""
+    """Grava as transações confirmadas pelo usuário, dando baixa em recorrências, registrando transferências e memorizando novas regras."""
     user_id = session['user_id']
     plan_ctx = get_user_plan_context(user_id)
     if not plan_ctx['permissoes']['can_import_ofx']:
@@ -1294,6 +1320,7 @@ def import_confirm():
     salvas = 0
     regras_aprendidas = 0
     baixas_recorrencias = 0
+    total_transferencias = 0
 
     for t in transacoes:
         valor = float(t.get('valor', 0))
@@ -1310,7 +1337,29 @@ def import_confirm():
         rec_trans_id = t.get('recorrencia_transacao_id')
         rec_id = t.get('recorrencia_id')
 
-        # 1. Se estiver vinculada a uma transação pendente de recorrência no mês, dá baixa nela
+        # 1. Se for classificado como Transferência entre Contas
+        if tipo == 'transferencia':
+            conta_contrapartida = t.get('conta_destino_id') or t.get('conta_contrapartida_id')
+            direcao = t.get('direcao_original', 'saida')
+            
+            if conta_contrapartida and int(conta_contrapartida) != int(conta_id):
+                if direcao == 'saida':
+                    origem_id = conta_id
+                    destino_id = conta_contrapartida
+                else:
+                    origem_id = conta_contrapartida
+                    destino_id = conta_id
+
+                cursor.execute("""
+                    INSERT INTO transacoes 
+                    (user_id, tipo, descricao, valor, data, conta_id, conta_destino_id, categoria_id, status, observacoes, fitid)
+                    VALUES (?, 'transferencia', ?, ?, ?, ?, ?, NULL, 'pago', 'Transferência entre contas importada via Extrato Bancário', ?)
+                """, (user_id, descricao, valor, data_trans, origem_id, destino_id, fitid))
+                salvas += 1
+                total_transferencias += 1
+                continue
+
+        # 2. Se estiver vinculada a uma transação pendente de recorrência no mês, dá baixa nela
         if rec_trans_id:
             cursor.execute("SELECT id FROM transacoes WHERE id = ? AND user_id = ?", (rec_trans_id, user_id))
             row_rec = cursor.fetchone()
@@ -1336,7 +1385,7 @@ def import_confirm():
                 """, (user_id, tipo, descricao, valor, data_trans, conta_id, categoria_id, observacoes, fitid, rec_id))
                 salvas += 1
         elif rec_id:
-            # 2. Se estiver vinculada à definição de recorrência (sem ID pendente específico)
+            # 3. Se estiver vinculada à definição de recorrência (sem ID pendente específico)
             mes_str = data_trans[5:7]
             ano_str = data_trans[:4]
             cursor.execute("""
@@ -1367,7 +1416,7 @@ def import_confirm():
                 """, (user_id, tipo, descricao, valor, data_trans, conta_id, categoria_id, observacoes, fitid, rec_id))
                 salvas += 1
         else:
-            # 3. Lançamento avulso normal
+            # 4. Lançamento avulso normal
             cursor.execute("""
                 INSERT INTO transacoes 
                 (user_id, tipo, descricao, valor, data, conta_id, categoria_id, status, observacoes, fitid)
@@ -1387,11 +1436,14 @@ def import_confirm():
     msg = f"{salvas} transações processadas com sucesso!"
     if baixas_recorrencias > 0:
         msg += f" ({baixas_recorrencias} baixas automáticas em recorrências realizadas sem duplicidade)."
+    if total_transferencias > 0:
+        msg += f" ({total_transferencias} transferências entre contas registradas)."
 
     return jsonify({
         "success": True,
         "salvas": salvas,
         "baixas_recorrencias": baixas_recorrencias,
+        "total_transferencias": total_transferencias,
         "regras_aprendidas": regras_aprendidas,
         "message": msg
     })

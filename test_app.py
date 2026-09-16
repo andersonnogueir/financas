@@ -638,6 +638,97 @@ class TestFinFlowBankImport(unittest.TestCase):
 
         print("OK: Reconciliação inteligente com recorrências e baixa automática sem duplicidade validada com sucesso!")
 
+    def test_18_import_transfer_between_accounts(self):
+        # 1. Logar como usuário
+        self.app.post('/api/auth/login', json={
+            "email": "anderson.import@exemplo.com",
+            "senha": "senhaSegura123"
+        })
+        user = database.get_user_by_email("anderson.import@exemplo.com")
+
+        # 2. Criar segunda conta (Banco Itaú Carteira) com saldo inicial de R$ 200,00
+        res_itau = self.app.post('/api/contas', json={
+            "nome": "Banco Itaú Carteira",
+            "tipo": "Corrente",
+            "saldo_inicial": 200.00
+        })
+        self.assertEqual(res_itau.status_code, 201)
+        itau_data = json.loads(res_itau.data)
+        conta_itau_id = itau_data['id']
+
+        # 3. Simular extrato bancário do Nubank (conta_id = 1) com saída de transferência para o Itaú
+        ofx_transf = """<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>
+        <STMTTRN>
+            <TRNTYPE>DEBIT</TRNTYPE>
+            <DTPOSTED>20260818120000[-03:EST]</DTPOSTED>
+            <TRNAMT>-350.00</TRNAMT>
+            <FITID>OFX-TRANSF-ITAU-20260818-001</FITID>
+            <MEMO>PIX TRANSF PARA BANCO ITAU</MEMO>
+        </STMTTRN>
+        </BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>"""
+
+        res_preview = self.app.post('/api/import/preview', data={
+            'conta_id': '1',
+            'arquivo': (io.BytesIO(ofx_transf.encode('utf-8')), 'extrato_nubank_transf.ofx')
+        }, content_type='multipart/form-data')
+
+        self.assertEqual(res_preview.status_code, 200)
+        preview_data = json.loads(res_preview.data)
+        self.assertTrue(preview_data['success'])
+        self.assertEqual(len(preview_data['transacoes']), 1)
+
+        t_transf = preview_data['transacoes'][0]
+        self.assertTrue(t_transf['is_transferencia'])
+        self.assertEqual(t_transf['tipo'], 'transferencia')
+        self.assertEqual(t_transf['conta_contrapartida_id'], conta_itau_id)
+
+        # 4. Confirmar a importação como transferência entre contas
+        res_confirm = self.app.post('/api/import/confirm', json={
+            "conta_id": 1,
+            "transacoes": [
+                {
+                    "data": t_transf['data'],
+                    "descricao": t_transf['descricao'],
+                    "valor": t_transf['valor'],
+                    "tipo": "transferencia",
+                    "direcao_original": "saida",
+                    "conta_destino_id": conta_itau_id,
+                    "fitid": t_transf['fitid']
+                }
+            ]
+        })
+        self.assertEqual(res_confirm.status_code, 200)
+        confirm_data = json.loads(res_confirm.data)
+        self.assertEqual(confirm_data['salvas'], 1)
+        self.assertEqual(confirm_data['total_transferencias'], 1)
+
+        # 5. Validar que os saldos de ambas as contas foram ajustados perfeitamente
+        contas = database.get_contas_by_user(user['id'])
+        conta_nubank = next((c for c in contas if c['id'] == 1), None)
+        conta_itau = next((c for c in contas if c['id'] == conta_itau_id), None)
+
+        self.assertIsNotNone(conta_nubank)
+        self.assertIsNotNone(conta_itau)
+
+        # A Conta Itaú iniciou com 200 e recebeu transferência de 350 -> Saldo final = 550.00
+        self.assertEqual(conta_itau['saldo_atual'], 550.00)
+
+        # Verificar se a transação de transferência foi salva no banco
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, tipo, conta_id, conta_destino_id, valor, status, fitid FROM transacoes WHERE fitid = 'OFX-TRANSF-ITAU-20260818-001'")
+        trans_salva = cursor.fetchone()
+        conn.close()
+
+        self.assertIsNotNone(trans_salva)
+        self.assertEqual(trans_salva['tipo'], 'transferencia')
+        self.assertEqual(trans_salva['conta_id'], 1)
+        self.assertEqual(trans_salva['conta_destino_id'], conta_itau_id)
+        self.assertEqual(trans_salva['valor'], 350.00)
+        self.assertEqual(trans_salva['status'], 'pago')
+
+        print("OK: Importação de transferência entre contas com impacto perfeito nos saldos de origem e destino validada!")
+
 if __name__ == '__main__':
     unittest.main()
 
