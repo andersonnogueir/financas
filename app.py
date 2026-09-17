@@ -1132,8 +1132,65 @@ def toggle_transacao_status(trans_id):
 @login_required
 def delete_transacao(trans_id):
     user_id = session['user_id']
+    excluir_recorrencia_toda = request.args.get("excluir_recorrencia_toda", "false").lower() in ("true", "1")
+
     conn = database.get_connection()
     cursor = conn.cursor()
+
+    # Buscar dados da transação antes de excluir para verificar recorrência
+    cursor.execute("SELECT * FROM transacoes WHERE id = ? AND user_id = ?", (trans_id, user_id))
+    trans = cursor.fetchone()
+
+    if not trans:
+        conn.close()
+        return jsonify({"error": "Transação não encontrada"}), 404
+
+    rec_id = trans['recorrencia_id'] if trans else None
+
+    if rec_id:
+        if excluir_recorrencia_toda:
+            conn.close()
+            database.delete_recorrencia_com_pendentes(
+                user_id=user_id,
+                rec_id=rec_id,
+                remover_pendentes=True,
+                remover_todos=False
+            )
+            return jsonify({
+                "success": True,
+                "recorrencia_excluida": True,
+                "message": "Recorrência completa e lançamentos pendentes excluídos com sucesso."
+            })
+        else:
+            # Registrar ocorrência como ignorada para este mês específico
+            try:
+                t_data = trans['data']
+                if isinstance(t_data, (date, datetime)):
+                    t_mes = t_data.month
+                    t_ano = t_data.year
+                elif t_data:
+                    dt = datetime.strptime(str(t_data)[:10], '%Y-%m-%d')
+                    t_mes = dt.month
+                    t_ano = dt.year
+                else:
+                    hoje = date.today()
+                    t_mes = hoje.month
+                    t_ano = hoje.year
+
+                if database.is_postgres():
+                    cursor.execute("""
+                        INSERT INTO recorrencias_ignoradas (user_id, recorrencia_id, mes, ano)
+                        VALUES (?, ?, ?, ?)
+                        ON CONFLICT (user_id, recorrencia_id, mes, ano) DO NOTHING
+                    """, (user_id, rec_id, t_mes, t_ano))
+                else:
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO recorrencias_ignoradas (user_id, recorrencia_id, mes, ano)
+                        VALUES (?, ?, ?, ?)
+                    """, (user_id, rec_id, t_mes, t_ano))
+            except Exception as e:
+                print(f"[AVISO] Falha ao registrar recorrencia ignorada: {e}")
+
     cursor.execute("DELETE FROM transacoes WHERE id = ? AND user_id = ?", (trans_id, user_id))
     conn.commit()
     conn.close()

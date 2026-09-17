@@ -264,6 +264,16 @@ def _init_postgres_tables(conn):
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(user_id, termo_busca)
         );
+
+        CREATE TABLE IF NOT EXISTS recorrencias_ignoradas (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+            recorrencia_id INTEGER NOT NULL REFERENCES recorrencias(id) ON DELETE CASCADE,
+            mes INTEGER NOT NULL,
+            ano INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, recorrencia_id, mes, ano)
+        );
     """)
     _migrate_postgres_tables(conn)
     conn.commit()
@@ -323,6 +333,22 @@ def _migrate_postgres_tables(conn):
                 status TEXT,
                 payload TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+    except Exception:
+        pass
+
+    # Tabela recorrencias_ignoradas
+    try:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS recorrencias_ignoradas (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+                recorrencia_id INTEGER NOT NULL REFERENCES recorrencias(id) ON DELETE CASCADE,
+                mes INTEGER NOT NULL,
+                ano INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, recorrencia_id, mes, ano)
             );
         """)
     except Exception:
@@ -401,6 +427,24 @@ def _migrate_sqlite_tables(conn):
                 payload TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE
+            );
+        """)
+    except Exception:
+        pass
+
+    # Tabela recorrencias_ignoradas
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS recorrencias_ignoradas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                recorrencia_id INTEGER NOT NULL,
+                mes INTEGER NOT NULL,
+                ano INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+                FOREIGN KEY (recorrencia_id) REFERENCES recorrencias(id) ON DELETE CASCADE,
+                UNIQUE(user_id, recorrencia_id, mes, ano)
             );
         """)
     except Exception:
@@ -536,6 +580,19 @@ def _init_sqlite_tables(conn):
             FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
             FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE CASCADE,
             UNIQUE(user_id, termo_busca)
+        );
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS recorrencias_ignoradas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            recorrencia_id INTEGER NOT NULL,
+            mes INTEGER NOT NULL,
+            ano INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+            FOREIGN KEY (recorrencia_id) REFERENCES recorrencias(id) ON DELETE CASCADE,
+            UNIQUE(user_id, recorrencia_id, mes, ano)
         );
     """)
     conn.commit()
@@ -1318,6 +1375,15 @@ def generate_recurring_for_month(user_id, mes, ano, conn=None):
 
     criadas = 0
     for rec in recs:
+        # 1. Verificar se esta ocorrência mensal foi especificamente excluída / ignorada pelo usuário
+        cursor.execute("""
+            SELECT COUNT(*) FROM recorrencias_ignoradas 
+            WHERE user_id = ? AND recorrencia_id = ? AND mes = ? AND ano = ?
+        """, (user_id, rec['id'], int(mes), int(ano)))
+        row_ign = cursor.fetchone()
+        if row_ign and (row_ign[0] or 0) > 0:
+            continue
+
         try:
             prox_mes = date(ano, mes, 1) + relativedelta(months=1)
             ultimo_dia_mes = (prox_mes - relativedelta(days=1)).day
@@ -1396,6 +1462,7 @@ def delete_recorrencia_com_pendentes(user_id, rec_id, remover_pendentes=True, re
     elif remover_pendentes:
         cursor.execute("DELETE FROM transacoes WHERE user_id = ? AND recorrencia_id = ? AND status = 'pendente'", (user_id, rec_id))
 
+    cursor.execute("DELETE FROM recorrencias_ignoradas WHERE user_id = ? AND recorrencia_id = ?", (user_id, rec_id))
     cursor.execute("DELETE FROM recorrencias WHERE id = ? AND user_id = ?", (rec_id, user_id))
     conn.commit()
     conn.close()
@@ -1403,6 +1470,23 @@ def delete_recorrencia_com_pendentes(user_id, rec_id, remover_pendentes=True, re
 def zerar_lancamentos_mes(user_id, mes, ano):
     conn = get_connection()
     cursor = conn.cursor()
+
+    # Buscar todas as recorrencias para ignorar neste mês específico
+    cursor.execute("SELECT id FROM recorrencias WHERE user_id = ?", (user_id,))
+    recs = cursor.fetchall()
+    for r in recs:
+        rec_id = r['id'] if isinstance(r, dict) or hasattr(r, 'keys') else r[0]
+        if is_postgres():
+            cursor.execute("""
+                INSERT INTO recorrencias_ignoradas (user_id, recorrencia_id, mes, ano)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT (user_id, recorrencia_id, mes, ano) DO NOTHING
+            """, (user_id, rec_id, int(mes), int(ano)))
+        else:
+            cursor.execute("""
+                INSERT OR IGNORE INTO recorrencias_ignoradas (user_id, recorrencia_id, mes, ano)
+                VALUES (?, ?, ?, ?)
+            """, (user_id, rec_id, int(mes), int(ano)))
 
     cursor.execute("""
         DELETE FROM transacoes 

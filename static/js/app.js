@@ -607,6 +607,7 @@ async function loadDashboard() {
     const sinal = data.balanco_mes >= 0 ? '+' : '';
     balancoEl.innerHTML = `Balanço mensal: <b class="${data.balanco_mes >= 0 ? 'text-emerald-500' : 'text-rose-500'}">${sinal}${formatBRL(data.balanco_mes)}</b>`;
 
+    state.alertas = data.alertas || [];
     renderInsightsIA(data.insights_ia, data.despesas_por_categoria);
     renderChartCategorias(data.despesas_por_categoria);
     renderChartHistorico(data.historico_meses);
@@ -1016,10 +1017,13 @@ function renderAlertas(alertas) {
           </div>
         </div>
         
-        <div class="text-right flex items-center gap-2.5 shrink-0 pl-2">
+        <div class="text-right flex items-center gap-2 shrink-0 pl-2">
           <span class="text-xs font-black text-rose-600 dark:text-rose-400">${formatBRL(a.valor)}</span>
           <button onclick="toggleTransacaoStatus(${a.id})" title="Marcar como Pago" class="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40 transition shadow-sm">
             <i data-lucide="check" class="w-3.5 h-3.5"></i>
+          </button>
+          <button onclick="excluirTransacao(${a.id})" title="Excluir / Cancelar Lançamento" class="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-800/40 transition shadow-sm">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
           </button>
         </div>
       </div>
@@ -1176,6 +1180,74 @@ async function toggleTransacaoStatus(id) {
 }
 
 async function excluirTransacao(id) {
+  let trans = (state.transacoes || []).find(t => t.id === id) || (state.alertas || []).find(a => a.id === id);
+
+  if (trans && trans.recorrencia_id) {
+    const result = await Swal.fire({
+      title: 'Excluir Lançamento Recorrente?',
+      html: `
+        <div class="text-left space-y-3 text-sm text-slate-600 dark:text-slate-300">
+          <p>O lançamento <b>"${trans.descricao || 'Recorrência'}"</b> está vinculado a uma recorrência automática.</p>
+          <div class="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 text-xs text-amber-800 dark:text-amber-200 space-y-1.5">
+            <div>• <b>Apenas deste mês:</b> Remove o lançamento de ${nomesMeses[state.selectedMonth]}/${state.selectedYear} sem afetar os próximos meses.</div>
+            <div>• <b>Recorrência Completa:</b> Apaga a regra de recorrência e remove todas as pendências futuras.</div>
+          </div>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      showDenyButton: true,
+      confirmButtonColor: '#ef4444',
+      denyButtonColor: '#f59e0b',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: '🗑 Excluir Recorrência Completa',
+      denyButtonText: '📅 Apenas deste mês',
+      cancelButtonText: 'Cancelar'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const res = await fetch(`/api/transacoes/${id}?excluir_recorrencia_toda=true`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          await loadAllData();
+          Swal.fire({
+            title: 'Recorrência Excluída!',
+            text: data.message || 'A regra de recorrência e pendências foram removidas.',
+            icon: 'success',
+            timer: 1800,
+            showConfirmButton: false
+          });
+        } else {
+          Swal.fire('Erro', data.error || 'Falha ao excluir recorrência', 'error');
+        }
+      } catch (err) {
+        console.error('Erro ao excluir recorrência:', err);
+      }
+    } else if (result.isDenied) {
+      try {
+        const res = await fetch(`/api/transacoes/${id}?excluir_recorrencia_toda=false`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          await loadAllData();
+          Swal.fire({
+            title: 'Lançamento Removido!',
+            text: 'O lançamento deste mês foi excluído com sucesso e não será recriado.',
+            icon: 'success',
+            timer: 1800,
+            showConfirmButton: false
+          });
+        } else {
+          Swal.fire('Erro', data.error || 'Falha ao excluir lançamento', 'error');
+        }
+      } catch (err) {
+        console.error('Erro ao excluir lançamento deste mês:', err);
+      }
+    }
+    return;
+  }
+
+  // Lançamento normal avulso
   const result = await Swal.fire({
     title: 'Excluir Lançamento?',
     text: 'Esta ação não pode ser desfeita e atualizará o saldo da conta.',
@@ -1194,6 +1266,8 @@ async function excluirTransacao(id) {
       if (data.success) {
         await loadAllData();
         Swal.fire({ title: 'Excluído!', text: 'O lançamento foi removido com sucesso.', icon: 'success', timer: 1200, showConfirmButton: false });
+      } else {
+        Swal.fire('Erro', data.error || 'Falha ao excluir lançamento', 'error');
       }
     } catch (err) {
       console.error('Erro ao excluir transação:', err);

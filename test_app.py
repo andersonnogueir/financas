@@ -865,6 +865,86 @@ class TestFinFlowBankImport(unittest.TestCase):
 
         print("OK: Cadastro de Cartão de Crédito, cálculo de fatura, limites, meta de gastos inteligente e alertas de importação validados com sucesso!")
 
+    def test_20_delete_recurring_transaction_without_regeneration(self):
+        """Testa a exclusão de lançamento de recorrência no mês sem recriação automática pelo dashboard."""
+        # 1. Obter usuário e conta
+        self.login_test_user()
+        user = database.get_user_by_email('anderson.import@exemplo.com')
+        contas = database.get_contas_by_user(user['id'])
+        conta_id = contas[0]['id']
+
+        # 2. Cadastrar uma recorrência mensal: "Consórcio - Argo" R$ 437,85 vencimento dia 15
+        res_rec = self.app.post('/api/recorrencias', json={
+            "descricao": "Consórcio - Argo",
+            "valor": 437.85,
+            "tipo": "despesa",
+            "dia_vencimento": 15,
+            "frequencia": "mensal",
+            "conta_id": conta_id,
+            "categoria_id": 4, # Transporte
+            "data_inicio": "2026-09-01"
+        })
+        self.assertEqual(res_rec.status_code, 201)
+        rec_data = json.loads(res_rec.data)
+        rec_id = rec_data['id']
+
+        # 3. Chamar o dashboard de Setembro/2026 para gerar a recorrência
+        res_dash_9 = self.app.get('/api/dashboard?mes=9&ano=2026')
+        self.assertEqual(res_dash_9.status_code, 200)
+
+        conn = database.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, descricao, valor, status, recorrencia_id, data FROM transacoes WHERE user_id = ? AND recorrencia_id = ? AND strftime('%m', data) = '09' AND strftime('%Y', data) = '2026'", (user['id'], rec_id))
+        trans_row = cursor.fetchone()
+        self.assertIsNotNone(trans_row, "A transação de Setembro/2026 deve ter sido criada pela recorrência")
+        trans_id = trans_row['id']
+        self.assertEqual(trans_row['status'], 'pendente')
+        self.assertEqual(float(trans_row['valor']), 437.85)
+
+        # 4. Excluir a transação do mês 09 com excluir_recorrencia_toda=false (Apenas deste mês)
+        res_del = self.app.delete(f'/api/transacoes/{trans_id}?excluir_recorrencia_toda=false')
+        self.assertEqual(res_del.status_code, 200)
+        del_data = json.loads(res_del.data)
+        self.assertTrue(del_data['success'])
+
+        # 5. Verificar que a transação foi apagada e registrada em recorrencias_ignoradas
+        cursor.execute("SELECT COUNT(*) FROM transacoes WHERE id = ?", (trans_id,))
+        self.assertEqual(cursor.fetchone()[0], 0)
+
+        cursor.execute("SELECT COUNT(*) FROM recorrencias_ignoradas WHERE user_id = ? AND recorrencia_id = ? AND mes = 9 AND ano = 2026", (user['id'], rec_id))
+        self.assertEqual(cursor.fetchone()[0], 1, "Deve registrar na tabela recorrencias_ignoradas")
+
+        # 6. Chamar novamente o dashboard de Setembro/2026: NÃO deve recriar a transação
+        res_dash_9_again = self.app.get('/api/dashboard?mes=9&ano=2026')
+        self.assertEqual(res_dash_9_again.status_code, 200)
+
+        cursor.execute("SELECT COUNT(*) FROM transacoes WHERE user_id = ? AND recorrencia_id = ? AND strftime('%m', data) = '09' AND strftime('%Y', data) = '2026'", (user['id'], rec_id))
+        self.assertEqual(cursor.fetchone()[0], 0, "Transação NÃO deve ser recriada no mês 9 após ter sido excluída")
+
+        # 7. Chamar o dashboard de Outubro/2026: deve gerar a transação de Outubro normalmente
+        res_dash_10 = self.app.get('/api/dashboard?mes=10&ano=2026')
+        self.assertEqual(res_dash_10.status_code, 200)
+
+        cursor.execute("SELECT id, descricao, valor, status, recorrencia_id FROM transacoes WHERE user_id = ? AND recorrencia_id = ? AND strftime('%m', data) = '10' AND strftime('%Y', data) = '2026'", (user['id'], rec_id))
+        trans_10 = cursor.fetchone()
+        self.assertIsNotNone(trans_10, "A transação de Outubro/2026 deve ser gerada normalmente")
+        trans_10_id = trans_10['id']
+
+        # 8. Excluir a transação de Outubro com excluir_recorrencia_toda=true (Excluir Recorrência Completa)
+        res_del_all = self.app.delete(f'/api/transacoes/{trans_10_id}?excluir_recorrencia_toda=true')
+        self.assertEqual(res_del_all.status_code, 200)
+        del_all_data = json.loads(res_del_all.data)
+        self.assertTrue(del_all_data['success'])
+
+        cursor.execute("SELECT COUNT(*) FROM recorrencias WHERE id = ?", (rec_id,))
+        self.assertEqual(cursor.fetchone()[0], 0, "A regra de recorrência deve ter sido excluída completamente")
+
+        cursor.execute("SELECT COUNT(*) FROM transacoes WHERE recorrencia_id = ?", (rec_id,))
+        self.assertEqual(cursor.fetchone()[0], 0, "Todas as transações pendentes vinculadas devem ter sido excluídas")
+
+        conn.close()
+        print("OK: Exclusão de lançamento de recorrência apenas no mês (sem recriação indevida) e exclusão completa validadas com sucesso!")
+
 if __name__ == '__main__':
     unittest.main()
 
